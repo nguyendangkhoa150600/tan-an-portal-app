@@ -1,0 +1,130 @@
+[
+  {
+    "objectId": "object-0131",
+    "tag": "E02::BAY::Warning",
+    "x": 668.0,
+    "y": 283.0,
+    "width": 26.0,
+    "height": 26.0
+  },
+  {
+    "objectId": "object-0031",
+    "tag": "E03::BAY::Warning",
+    "x": 1273.0,
+    "y": 283.0,
+    "width": 26.0,
+    "height": 26.0
+  },
+  {
+    "objectId": "object-0137",
+    "tag": "E04::BAY::Warning",
+    "x": 945.0,
+    "y": 404.0,
+    "width": 26.0,
+    "height": 26.0
+  },
+  {
+    "objectId": "object-0110",
+    "tag": "E01::BAY::Warning",
+    "x": 669.0,
+    "y": 460.0,
+    "width": 26.0,
+    "height": 26.0
+  },
+  {
+    "objectId": "object-0193",
+    "tag": "E05::BAY::Warning",
+    "x": 1274.0,
+    "y": 460.0,
+    "width": 26.0,
+    "height": 26.0
+  },
+  {
+    "objectId": "object-0215",
+    "tag": "J11::BAY::Warning",
+    "x": 103.0,
+    "y": 746.0,
+    "width": 26.0,
+    "height": 26.0
+  },
+  {
+    "objectId": "object-0273",
+    "tag": "J14::BAY::Warning",
+    "x": 500.0,
+    "y": 746.0,
+    "width": 26.0,
+    "height": 26.0
+  },
+  {
+    "objectId": "object-0285",
+    "tag": "J15::BAY::Warning",
+    "x": 627.0,
+    "y": 746.0,
+    "width": 26.0,
+    "height": 26.0
+  },
+  {
+    "objectId": "object-0886",
+    "tag": "J31::BAY::Warning",
+    "x": 745.0,
+    "y": 746.0,
+    "width": 26.0,
+    "height": 26.0
+  },
+  {
+    "objectId": "object-0931",
+    "tag": "J33::BAY::Warning",
+    "x": 993.0,
+    "y": 746.0,
+    "width": 26.0,
+    "height": 26.0
+  },
+  {
+    "objectId": "object-0957",
+    "tag": "J34::BAY::Warning",
+    "x": 1127.0,
+    "y": 746.0,
+    "width": 26.0,
+    "height": 26.0
+  },
+  {
+    "objectId": "object-0728",
+    "tag": "J25::BAY::Warning",
+    "x": 1359.0,
+    "y": 746.0,
+    "width": 26.0,
+    "height": 26.0
+  },
+  {
+    "objectId": "object-0754",
+    "tag": "J24::BAY::Warning",
+    "x": 1493.0,
+    "y": 746.0,
+    "width": 26.0,
+    "height": 26.0
+  },
+  {
+    "objectId": "object-0682",
+    "tag": "J21::BAY::Warning",
+    "x": 1851.0,
+    "y": 746.0,
+    "width": 26.0,
+    "height": 26.0
+  },
+  {
+    "objectId": "object-0983",
+    "tag": "J35::BAY::Warning",
+    "x": 1253.0,
+    "y": 749.0,
+    "width": 26.0,
+    "height": 26.0
+  },
+  {
+    "objectId": "object-0780",
+    "tag": "J23::BAY::Warning",
+    "x": 1619.0,
+    "y": 749.0,
+    "width": 26.0,
+    "height": 26.0
+  }
+]

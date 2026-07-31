@@ -1,0 +1,45 @@
+[
+  {
+    "objectId": "compound-j12-xswi1",
+    "label": "TD41-1",
+    "stateSource": {
+      "kind": "position",
+      "tag": "J12::XSWI1::PosSt"
+    },
+    "shapes": [
+      { "kind": "line", "points": [[209, 730], [199, 740]] },
+      { "kind": "line", "points": [[210, 730], [220, 740]] },
+      { "kind": "line", "points": [[209, 720], [199, 730]] },
+      { "kind": "line", "points": [[210, 720], [220, 730]] },
+      { "kind": "line", "points": [[209, 788], [199, 778]] },
+      { "kind": "line", "points": [[210, 788], [220, 778]] },
+      { "kind": "line", "points": [[209, 798], [199, 788]] },
+      { "kind": "line", "points": [[210, 798], [220, 788]] },
+      {
+        "kind": "polygon",
+        "points": [[204, 742], [216, 742], [216, 775], [204, 775]]
+      },
+      { "kind": "line", "points": [[210, 731], [210, 788]] }
+    ]
+  },
+  {
+    "objectId": "compound-j13-vt",
+    "label": "CC-TUC41",
+    "stateSource": {
+      "kind": "serviceTest",
+      "inServiceTag": "J13::BAY::VTInService",
+      "inTestTag": "J13::BAY::VTInTest"
+    },
+    "shapes": [
+      { "kind": "line", "points": [[354, 730], [344, 740]] },
+      { "kind": "line", "points": [[355, 730], [365, 740]] },
+      { "kind": "line", "points": [[354, 720], [344, 730]] },
+      { "kind": "line", "points": [[355, 720], [365, 730]] },
+      {
+        "kind": "polygon",
+        "points": [[349, 742], [360, 742], [360, 774], [349, 774]]
+      },
+      { "kind": "line", "points": [[355, 731], [355, 774]] }
+    ]
+  }
+]
