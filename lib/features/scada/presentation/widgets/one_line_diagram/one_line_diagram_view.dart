@@ -1,13 +1,10 @@
-import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:tan_an_portal/core/theme/app_theme.dart';
-import 'package:tan_an_portal/features/scada/data/models/overlay_models.dart';
+import 'package:tan_an_portal/features/scada/data/sources/scada_api_client.dart';
 import 'package:tan_an_portal/features/scada/presentation/providers/scada_provider.dart';
-import 'one_line_canvas_painter.dart';
-import 'one_line_value_overlay.dart';
-import 'one_line_warning_overlay.dart';
 
 class OneLineDiagramView extends StatefulWidget {
   const OneLineDiagramView({super.key});
@@ -17,567 +14,329 @@ class OneLineDiagramView extends StatefulWidget {
 }
 
 class _OneLineDiagramViewState extends State<OneLineDiagramView> {
+  WebViewController? _controller;
   bool _isLoading = true;
-  List<BreakerOverlay> _breakers = [];
-  List<StatusSymbolOverlay> _statusSymbols = [];
-  List<ValueOverlay> _valueOverlays = [];
-  List<WarningOverlay> _warningOverlays = [];
-  final TransformationController _transformationController =
-      TransformationController();
+  bool _hasError = false;
+  bool _initialized = false;
+
+  static const String _baseUrl = ScadaApiClient.configuredBaseUrl;
+  static const String _diagramPath = '';
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadOverlayData();
-    });
+    _initController();
   }
 
-  Future<void> _loadOverlayData() async {
-    try {
-      final bundle = DefaultAssetBundle.of(context);
+  void _initController() {
+    if (_controller != null) return;
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0xFF05070A))
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (_) {
+            if (mounted) {
+              setState(() {
+                _isLoading = true;
+                _hasError = false;
+              });
+            }
+          },
+          onPageFinished: (_) async {
+            if (mounted) setState(() => _isLoading = false);
 
-      final breakersStr = await bundle.loadString(
-        'assets/data/oneline-breaker-overlays.json',
-      );
-      final statusSymbolsStr = await bundle.loadString(
-        'assets/data/oneline-status-symbol-overlays.json',
-      );
-      final valueOverlaysStr = await bundle.loadString(
-        'assets/data/oneline-value-overlays.json',
-      );
-      final warningOverlaysStr = await bundle.loadString(
-        'assets/data/oneline-warning-overlays.json',
-      );
+            // Clean DOM manipulation to navigate to diagram and hide portal chrome without breaking page layout
+            await _controller?.runJavaScript('''
+              (function() {
+                function prepareDiagramView() {
+                  try {
+                    // 1. Click on "Sơ đồ điện" nav button if present and not active
+                    var navButtons = document.querySelectorAll('nav button');
+                    for (var i = 0; i < navButtons.length; i++) {
+                      var text = (navButtons[i].textContent || '').trim();
+                      if (text.indexOf('Sơ đồ điện') !== -1 || text.indexOf('S\\u01A1 \\u0111\\u1ED3 \\u0111i\\u1EC7n') !== -1) {
+                        navButtons[i].click();
+                        break;
+                      }
+                    }
 
-      final List<dynamic> breakersJson = jsonDecode(breakersStr);
-      final List<dynamic> statusSymbolsJson = jsonDecode(statusSymbolsStr);
-      final List<dynamic> valueOverlaysJson = jsonDecode(valueOverlaysStr);
-      final List<dynamic> warningOverlaysJson = jsonDecode(warningOverlaysStr);
+                    // 2. Hide sidebar navigation aside and expand shell
+                    var aside = document.querySelector('aside');
+                    if (aside) {
+                      aside.style.display = 'none';
+                    }
+                    var shell = document.querySelector('[class*="shell"]');
+                    if (shell) {
+                      shell.style.gridTemplateColumns = '1fr';
+                      shell.style.display = 'grid';
+                      shell.style.height = '100vh';
+                      shell.style.width = '100vw';
+                    }
 
-      if (mounted) {
-        setState(() {
-          _breakers = breakersJson
-              .map((x) => BreakerOverlay.fromJson(x))
-              .toList();
-          _statusSymbols = statusSymbolsJson
-              .map((x) => StatusSymbolOverlay.fromJson(x))
-              .toList();
-          _valueOverlays = valueOverlaysJson
-              .map((x) => ValueOverlay.fromJson(x))
-              .toList();
-          _warningOverlays = warningOverlaysJson
-              .map((x) => WarningOverlay.fromJson(x))
-              .toList();
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error loading overlay data: $e');
-      }
+                    // 3. Expand main and workspace to full viewport
+                    var main = document.querySelector('main');
+                    if (main) {
+                      main.style.padding = '0';
+                      main.style.margin = '0';
+                      main.style.height = '100vh';
+                      main.style.width = '100vw';
+                    }
+                    var workspace = document.querySelector('[class*="workspace"]');
+                    if (workspace) {
+                      workspace.style.height = '100vh';
+                      workspace.style.maxHeight = '100vh';
+                      workspace.style.border = 'none';
+                      workspace.style.borderRadius = '0';
+                    }
+
+                    // 4. Hide portal headers and footers
+                    var headers = document.querySelectorAll('header');
+                    headers.forEach(function(h) { h.style.display = 'none'; });
+                    var footers = document.querySelectorAll('footer');
+                    footers.forEach(function(f) { f.style.display = 'none'; });
+                  } catch(e) {}
+                }
+
+                prepareDiagramView();
+                setTimeout(prepareDiagramView, 100);
+                setTimeout(prepareDiagramView, 300);
+                setTimeout(prepareDiagramView, 800);
+                setTimeout(prepareDiagramView, 1500);
+              })();
+            ''');
+          },
+          onWebResourceError: (WebResourceError error) {
+            // Only show full error overlay if the main frame itself failed to load.
+            // Subresource errors (e.g. Cloudflare beacon CSP block) should not break diagram display.
+            if (error.isForMainFrame ?? false) {
+              if (mounted) {
+                setState(() {
+                  _isLoading = false;
+                  _hasError = true;
+                });
+              }
+            }
+          },
+        ),
+      );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _initController();
+    if (!_initialized) {
+      _initialized = true;
+      _loadPage();
     }
   }
 
-  void _zoom(double factor) {
-    final Matrix4 currentMatrix = _transformationController.value;
-    final double currentScale = currentMatrix.getMaxScaleOnAxis();
-    final double newScale = (currentScale * factor).clamp(0.5, 4.0);
-    final double scaleRatio = newScale / currentScale;
-    final Matrix4 newMatrix = currentMatrix.clone()
-      ..multiply(Matrix4.diagonal3Values(scaleRatio, scaleRatio, 1.0));
-    _transformationController.value = newMatrix;
+  Future<void> _loadPage() async {
+    _initController();
+    final Map<String, String> headers = {
+      'Accept': 'text/html',
+      'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
+    };
+
+    final uri = Uri.parse('$_baseUrl$_diagramPath');
+    await _controller?.loadRequest(uri, headers: headers);
   }
 
-  void _zoomIn() => _zoom(1.25);
-  void _zoomOut() => _zoom(0.8);
-  void _resetZoom() {
-    _transformationController.value = Matrix4.identity();
-  }
-
-  void _openFullscreen(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => _FullscreenDiagramScreen(
-          breakers: _breakers,
-          statusSymbols: _statusSymbols,
-          valueOverlays: _valueOverlays,
-          warningOverlays: _warningOverlays,
-        ),
-      ),
-    );
+  Future<void> _reload() async {
+    if (mounted) setState(() => _isLoading = true);
+    await _loadPage();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppTheme.primary),
-      );
-    }
-
     final provider = context.watch<ScadaProvider>();
-    final snapshot = provider.envelope.snapshot;
+    final int tagCount = provider.envelope.snapshot.tags.length;
+    final bool isLive = provider.streamHealthy;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final double width = constraints.maxWidth;
-        final bool isNarrow = width < 900;
-
-        return Padding(
-          padding: isNarrow
-              ? const EdgeInsets.all(12.0)
-              : const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      children: [
+        // ── Header bar ──
+        Container(
+          color: AppTheme.surface,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
             children: [
-              // View Title & Legend Row
-              if (isNarrow) ...[
-                Column(
+              // Title - takes all available space, ellipsis if too long
+              const Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
-                      'Sơ đồ HMI nhất thứ',
+                    Text(
+                      'Sơ đồ nhất thứ trạm',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 13,
                         fontWeight: FontWeight.bold,
-                        color: AppTheme.textPrimary,
+                        color: AppTheme.textStrong,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    const Text(
-                      'TBA 110kV Tân An · Kéo/Phóng to thu nhỏ',
+                    Text(
+                      'Trạm biến áp 110kV Tân An',
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 10,
                         color: AppTheme.textSecondary,
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 6,
-                      children: [
-                        _legendItem(AppTheme.scadaClosed, 'Đóng'),
-                        _legendItem(AppTheme.scadaOpen, 'Mở'),
-                        _legendItem(AppTheme.scadaIntermediate, 'Chuyển tiếp'),
-                        _legendItem(AppTheme.scadaUnknown, 'Mất tín hiệu'),
-                      ],
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
-              ] else ...[
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+              const SizedBox(width: 8),
+              // Live status dot + count
+              _buildStatusDot(provider, isLive, tagCount),
+              const SizedBox(width: 4),
+              // Reload button
+              IconButton(
+                iconSize: 18,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                icon: const Icon(
+                  Icons.refresh_rounded,
+                  color: AppTheme.textSecondary,
+                ),
+                tooltip: 'Tải lại sơ đồ',
+                onPressed: _reload,
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1, thickness: 1, color: AppTheme.border),
+
+        // ── WebView body ──
+        Expanded(
+          child: Stack(
+            children: [
+              if (_controller != null) _buildWebViewWidget(),
+
+              // Loading overlay
+              if (_isLoading)
+                Container(
+                  color: const Color(0xFF05070A),
+                  child: const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
+                        CircularProgressIndicator(color: AppTheme.primary),
+                        SizedBox(height: 16),
                         Text(
-                          'Sơ đồ HMI nhất thứ',
+                          'Đang tải sơ đồ…',
                           style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.textPrimary,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Trạm biến áp 110kV Tân An · Hỗ trợ phóng to/thu nhỏ và kéo rê sơ đồ',
-                          style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 13,
                             color: AppTheme.textSecondary,
                           ),
                         ),
                       ],
                     ),
+                  ),
+                ),
 
-                    // Legend
-                    Row(
+              // Error overlay
+              if (_hasError && !_isLoading)
+                Container(
+                  color: AppTheme.background,
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        _legendItem(AppTheme.scadaClosed, 'Đóng (Closed)'),
-                        const SizedBox(width: 14),
-                        _legendItem(AppTheme.scadaOpen, 'Mở (Open)'),
-                        const SizedBox(width: 14),
-                        _legendItem(
-                          AppTheme.scadaIntermediate,
-                          'Chuyển tiếp (Interm)',
+                        const Icon(
+                          Icons.signal_wifi_off_rounded,
+                          size: 48,
+                          color: AppTheme.textSecondary,
                         ),
-                        const SizedBox(width: 14),
-                        _legendItem(
-                          AppTheme.scadaUnknown,
-                          'Mất tín hiệu (Unknown)',
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Không thể tải sơ đồ điện',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textStrong,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Kiểm tra kết nối mạng hoặc thử tải lại',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: _reload,
+                          icon: const Icon(Icons.refresh_rounded, size: 16),
+                          label: const Text('Tải lại'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primary,
+                            foregroundColor: Colors.black,
+                          ),
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 16),
-
-              // Substation Diagram Card with Interactive Viewer
-              Expanded(
-                child: Card(
-                  color: const Color(
-                    0xFF0F172A,
-                  ), // Dark slate background specifically for high-contrast SCADA HMI
-                  clipBehavior: Clip.antiAlias,
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: ClipRect(
-                          child: InteractiveViewer(
-                            transformationController: _transformationController,
-                            minScale: 0.5,
-                            maxScale: 4.0,
-                            boundaryMargin: const EdgeInsets.all(80.0),
-                            child: Center(
-                              child: AspectRatio(
-                                aspectRatio:
-                                    1920.0 /
-                                    1028.0, // Match the original HMI canvas aspect ratio
-                                child: LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    final double canvasWidth =
-                                        constraints.maxWidth;
-                                    final double canvasHeight =
-                                        constraints.maxHeight;
-
-                                    return Stack(
-                                      children: [
-                                        // 1. Reference diagram raster image
-                                        Positioned.fill(
-                                          child: Image.asset(
-                                            'assets/scada/oneline-1-live-reference.png',
-                                            fit: BoxFit.fill,
-                                            filterQuality: FilterQuality.high,
-                                          ),
-                                        ),
-
-                                        // 2. Custom Painter layer for switches & breakers
-                                        Positioned.fill(
-                                          child: CustomPaint(
-                                            painter: OneLineCanvasPainter(
-                                              statusSymbols: _statusSymbols,
-                                              breakers: _breakers,
-                                              snapshot: snapshot,
-                                            ),
-                                          ),
-                                        ),
-
-                                        // 3. Live Values textual overlays
-                                        Positioned.fill(
-                                          child: OneLineValueOverlay(
-                                            valueOverlays: _valueOverlays,
-                                            snapshot: snapshot,
-                                            containerWidth: canvasWidth,
-                                            containerHeight: canvasHeight,
-                                          ),
-                                        ),
-
-                                        // 4. Blinking Warning overlays
-                                        Positioned.fill(
-                                          child: OneLineWarningOverlay(
-                                            warningOverlays: _warningOverlays,
-                                            snapshot: snapshot,
-                                            containerWidth: canvasWidth,
-                                            containerHeight: canvasHeight,
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        right: 12,
-                        bottom: 12,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: AppTheme.surface.withOpacity(0.85),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: AppTheme.border),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.25),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 2,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                iconSize: 18,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(
-                                  minWidth: 32,
-                                  minHeight: 32,
-                                ),
-                                icon: const Icon(
-                                  Icons.zoom_in_rounded,
-                                  color: AppTheme.textPrimary,
-                                ),
-                                onPressed: _zoomIn,
-                                tooltip: 'Phóng to',
-                              ),
-                              IconButton(
-                                iconSize: 18,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(
-                                  minWidth: 32,
-                                  minHeight: 32,
-                                ),
-                                icon: const Icon(
-                                  Icons.zoom_out_rounded,
-                                  color: AppTheme.textPrimary,
-                                ),
-                                onPressed: _zoomOut,
-                                tooltip: 'Thu nhỏ',
-                              ),
-                              IconButton(
-                                iconSize: 16,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(
-                                  minWidth: 32,
-                                  minHeight: 32,
-                                ),
-                                icon: const Icon(
-                                  Icons.restart_alt_rounded,
-                                  color: AppTheme.textPrimary,
-                                ),
-                                onPressed: _resetZoom,
-                                tooltip: 'Đặt lại',
-                              ),
-                              const SizedBox(width: 4),
-                              Container(
-                                width: 1,
-                                height: 16,
-                                color: AppTheme.border,
-                              ),
-                              const SizedBox(width: 4),
-                              IconButton(
-                                iconSize: 16,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(
-                                  minWidth: 32,
-                                  minHeight: 32,
-                                ),
-                                icon: const Icon(
-                                  Icons.fullscreen_rounded,
-                                  color: AppTheme.textPrimary,
-                                ),
-                                onPressed: () => _openFullscreen(context),
-                                tooltip: 'Toàn màn hình',
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
-              ),
             ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _legendItem(Color color, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          text,
-          style: const TextStyle(
-            fontSize: 11.5,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.textSecondary,
           ),
         ),
       ],
     );
   }
-}
 
-class _FullscreenDiagramScreen extends StatefulWidget {
-  final List<BreakerOverlay> breakers;
-  final List<StatusSymbolOverlay> statusSymbols;
-  final List<ValueOverlay> valueOverlays;
-  final List<WarningOverlay> warningOverlays;
-
-  const _FullscreenDiagramScreen({
-    required this.breakers,
-    required this.statusSymbols,
-    required this.valueOverlays,
-    required this.warningOverlays,
-  });
-
-  @override
-  State<_FullscreenDiagramScreen> createState() =>
-      _FullscreenDiagramScreenState();
-}
-
-class _FullscreenDiagramScreenState extends State<_FullscreenDiagramScreen> {
-  final TransformationController _transformationController =
-      TransformationController();
-
-  void _zoom(double factor) {
-    final Matrix4 currentMatrix = _transformationController.value;
-    final double currentScale = currentMatrix.getMaxScaleOnAxis();
-    final double newScale = (currentScale * factor).clamp(0.5, 4.0);
-    final double scaleRatio = newScale / currentScale;
-    final Matrix4 newMatrix = currentMatrix.clone()
-      ..multiply(Matrix4.diagonal3Values(scaleRatio, scaleRatio, 1.0));
-    _transformationController.value = newMatrix;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final provider = context.watch<ScadaProvider>();
-    final snapshot = provider.envelope.snapshot;
-
-    return Scaffold(
-      backgroundColor: const Color(0xFF070B19),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            // 1. Fullscreen interactive canvas
-            Positioned.fill(
-              child: ClipRect(
-                child: InteractiveViewer(
-                  transformationController: _transformationController,
-                  minScale: 0.5,
-                  maxScale: 4.0,
-                  boundaryMargin: const EdgeInsets.all(150.0),
-                  child: Center(
-                    child: AspectRatio(
-                      aspectRatio: 1920.0 / 1028.0,
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final double width = constraints.maxWidth;
-                          final double height = constraints.maxHeight;
-
-                          return Stack(
-                            children: [
-                              Positioned.fill(
-                                child: Image.asset(
-                                  'assets/scada/oneline-1-live-reference.png',
-                                  fit: BoxFit.fill,
-                                  filterQuality: FilterQuality.high,
-                                ),
-                              ),
-                              Positioned.fill(
-                                child: CustomPaint(
-                                  painter: OneLineCanvasPainter(
-                                    breakers: widget.breakers,
-                                    statusSymbols: widget.statusSymbols,
-                                    snapshot: snapshot,
-                                  ),
-                                ),
-                              ),
-                              Positioned.fill(
-                                child: OneLineValueOverlay(
-                                  valueOverlays: widget.valueOverlays,
-                                  snapshot: snapshot,
-                                  containerWidth: width,
-                                  containerHeight: height,
-                                ),
-                              ),
-                              Positioned.fill(
-                                child: OneLineWarningOverlay(
-                                  warningOverlays: widget.warningOverlays,
-                                  snapshot: snapshot,
-                                  containerWidth: width,
-                                  containerHeight: height,
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+  /// Compact status indicator: just a coloured dot + tag count
+  Widget _buildStatusDot(ScadaProvider provider, bool isLive, int tagCount) {
+    final color = isLive ? AppTheme.success : AppTheme.error;
+    final label = isLive
+        ? (tagCount > 0 ? '$tagCount tín hiệu' : 'Online')
+        : 'Mất kết nối';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: color,
+              fontWeight: FontWeight.bold,
             ),
-
-            // 2. Close button top-left
-            Positioned(
-              top: 16,
-              left: 16,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.6),
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.white),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ),
-            ),
-
-            // 3. Zoom controls bottom-right
-            Positioned(
-              right: 16,
-              bottom: 16,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.7),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white10),
-                ),
-                padding: const EdgeInsets.all(4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.zoom_in_rounded,
-                        color: Colors.white,
-                      ),
-                      onPressed: () => _zoom(1.25),
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.zoom_out_rounded,
-                        color: Colors.white,
-                      ),
-                      onPressed: () => _zoom(0.8),
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.restart_alt_rounded,
-                        color: Colors.white,
-                      ),
-                      onPressed: () =>
-                          _transformationController.value = Matrix4.identity(),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+  }
+
+  Widget _buildWebViewWidget() {
+    if (_controller == null) return const SizedBox.shrink();
+
+    final controllerPlatform = _controller!.platform;
+    if (controllerPlatform is AndroidWebViewController) {
+      return WebViewWidget.fromPlatformCreationParams(
+        params: AndroidWebViewWidgetCreationParams.fromPlatformWebViewWidgetCreationParams(
+          AndroidWebViewWidgetCreationParams(
+            controller: controllerPlatform,
+            displayWithHybridComposition: true,
+          ),
+        ),
+      );
+    }
+
+    return WebViewWidget(controller: _controller!);
   }
 }
