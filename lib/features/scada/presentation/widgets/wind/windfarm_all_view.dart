@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 import 'package:tan_an_portal/core/theme/app_theme.dart';
 import 'package:tan_an_portal/core/utils/scada_helpers.dart';
 import '../../providers/scada_provider.dart';
+import '../../../data/models/dispatch_models.dart';
+import '../dispatch/dispatch_lamp_widget.dart';
 import 'windfarm_1_view.dart' show SpinningTurbineIcon, CompassRose;
 
 class WindFarmAllView extends StatefulWidget {
@@ -64,6 +66,18 @@ class _WindFarmAllViewState extends State<WindFarmAllView> {
       0.0,
       (s, t) => s + (t['power'] as num).toDouble(),
     );
+    final double dg1PowerTotal = dg1Turbines
+        .where((t) => !(t['signalDelayed'] as bool? ?? false) && (t['power'] as num).toDouble().isFinite)
+        .fold<double>(0.0, (s, t) => s + (t['power'] as num).toDouble());
+    final double vestas1Power = dg2Turbines
+        .take(8)
+        .where((t) => !(t['signalDelayed'] as bool? ?? false) && (t['power'] as num).toDouble().isFinite)
+        .fold<double>(0.0, (s, t) => s + (t['power'] as num).toDouble());
+    final double vestas2Power = dg2Turbines
+        .skip(8)
+        .where((t) => !(t['signalDelayed'] as bool? ?? false) && (t['power'] as num).toDouble().isFinite)
+        .fold<double>(0.0, (s, t) => s + (t['power'] as num).toDouble());
+
     final double windSum = liveTurbines.fold<double>(
       0.0,
       (s, t) => s + (t['wind'] as num).toDouble(),
@@ -469,6 +483,44 @@ class _WindFarmAllViewState extends State<WindFarmAllView> {
           if (delayedCount > 0) ...[
             const SizedBox(height: 8),
             _statItem(AppTheme.warning, 'Tín hiệu chậm', '$delayedCount trụ'),
+          ],
+          if (provider.dispatchLamps.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            const Divider(color: AppTheme.border),
+            const SizedBox(height: 12),
+            const Text(
+              'ĐIỀU ĐỘ & GIỚI HẠN PHÁT',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 10),
+            ProjectDispatchRow(
+              label: 'Windey (ĐG1)',
+              outputMw: dg1PowerTotal / 1000.0,
+              lamp: provider.dispatchLamps.cast<DispatchLamp?>().firstWhere(
+                (l) => l?.key == 'windy',
+                orElse: () => null,
+              ),
+            ),
+            ProjectDispatchRow(
+              label: 'Vestas 1 (ĐG2)',
+              outputMw: vestas1Power / 1000.0,
+              lamp: provider.dispatchLamps.cast<DispatchLamp?>().firstWhere(
+                (l) => l?.key == 'Vestas1',
+                orElse: () => null,
+              ),
+            ),
+            ProjectDispatchRow(
+              label: 'Vestas 2 (ĐG2)',
+              outputMw: vestas2Power / 1000.0,
+              lamp: provider.dispatchLamps.cast<DispatchLamp?>().firstWhere(
+                (l) => l?.key == 'Vestas2',
+                orElse: () => null,
+              ),
+            ),
           ],
         ],
       ),

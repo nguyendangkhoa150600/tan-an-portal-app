@@ -31,10 +31,17 @@ class ScadaApiClient {
       _get('/api/realtime/diagram');
 
   Future<Map<String, dynamic>> realtimeTurbines() =>
-      _get('/api/realtime/turbines', acceptedStatuses: const {200, 503});
+      _get('/api/realtime/turbines', acceptedStatuses: const {200, 503, 530});
+
+  Future<Map<String, dynamic>> windSnapshot() =>
+      _get('/api/wind/snapshot', acceptedStatuses: const {200, 503, 530});
 
   Future<Map<String, dynamic>> vestasIecSnapshot() =>
-      _get('/api/vestas/snapshot', acceptedStatuses: const {200, 503});
+      _get('/api/vestas/snapshot', acceptedStatuses: const {200, 503, 530});
+
+  Future<Map<String, dynamic>> vestasLive() =>
+      _get('/api/vestas/live', acceptedStatuses: const {200, 503, 530});
+
 
   Future<Map<String, dynamic>> analyticsOverview({
     required String granularity,
