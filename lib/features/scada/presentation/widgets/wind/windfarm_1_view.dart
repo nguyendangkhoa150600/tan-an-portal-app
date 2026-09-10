@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:tan_an_portal/core/theme/app_theme.dart';
 import 'package:tan_an_portal/core/utils/scada_helpers.dart';
 import '../../providers/scada_provider.dart';
+import '../dispatch/dispatch_lamp_widget.dart';
 
 class WindFarm1View extends StatelessWidget {
   const WindFarm1View({super.key});
@@ -118,21 +119,28 @@ class WindFarm1View extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Icon(
-                Icons.analytics_rounded,
-                color: AppTheme.primary,
-                size: 18,
+              Row(
+                children: [
+                  const Icon(
+                    Icons.analytics_rounded,
+                    color: AppTheme.primary,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Tổng quan nhà máy',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textStrong,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              const Text(
-                'Tổng quan nhà máy',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textStrong,
-                ),
-              ),
+              if (provider.windAgc != null)
+                AgcChip(agc: provider.windAgc!),
             ],
           ),
           const SizedBox(height: 16),

@@ -23,6 +23,7 @@ class ScadaShellScreen extends StatefulWidget {
 class _ScadaShellScreenState extends State<ScadaShellScreen> {
   late Timer _clockTimer;
   DateTime _currentTime = DateTime.now();
+  bool _isReloading = false;
 
   @override
   void initState() {
@@ -357,6 +358,44 @@ class _ScadaShellScreenState extends State<ScadaShellScreen> {
                                   ),
                                 ),
                               ],
+                              const SizedBox(width: 12),
+                              GestureDetector(
+                                onTap: _isReloading
+                                    ? null
+                                    : () async {
+                                        setState(() {
+                                          _isReloading = true;
+                                        });
+                                        try {
+                                          await provider.refreshAll();
+                                        } finally {
+                                          if (mounted) {
+                                            setState(() {
+                                              _isReloading = false;
+                                            });
+                                          }
+                                        }
+                                      },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  child: _isReloading
+                                      ? const SizedBox(
+                                          width: 12,
+                                          height: 12,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 1.5,
+                                            valueColor: AlwaysStoppedAnimation<Color>(
+                                              AppTheme.primary,
+                                            ),
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Icons.sync_rounded,
+                                          size: 16,
+                                          color: AppTheme.textSecondary,
+                                        ),
+                                ),
+                              ),
                               if (provider.activeView == 'oneline') ...[
                                 const SizedBox(width: 12),
                                 GestureDetector(
