@@ -12,6 +12,8 @@ import '../widgets/wind/wind_combined_view.dart';
 import '../widgets/analytics/analytics_view.dart';
 import '../widgets/forecast/forecast_view.dart';
 import '../widgets/diagnostics/diagnostics_view.dart';
+import '../widgets/category/category_view.dart';
+import 'package:tan_an_portal/features/auth/presentation/screens/login_screen.dart';
 
 class ScadaShellScreen extends StatefulWidget {
   const ScadaShellScreen({super.key});
@@ -57,6 +59,8 @@ class _ScadaShellScreenState extends State<ScadaShellScreen> {
         return const ForecastView();
       case 'diagnostics':
         return const DiagnosticsView();
+      case 'danhmuc':
+        return const CategoryView();
       default:
         return const OverviewDashboardView();
     }
@@ -76,6 +80,8 @@ class _ScadaShellScreenState extends State<ScadaShellScreen> {
         return 'Dự báo & Thời tiết';
       case 'diagnostics':
         return 'Chẩn đoán hạ tầng';
+      case 'danhmuc':
+        return 'Danh mục hệ thống';
       default:
         return 'Hệ thống SCADA';
     }
@@ -177,6 +183,10 @@ class _ScadaShellScreenState extends State<ScadaShellScreen> {
     }
 
     final provider = context.watch<ScadaProvider>();
+    if (!provider.isLoggedIn) {
+      return const LoginScreen();
+    }
+
     final isLive = provider.pollState == 'live';
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isMobile = screenWidth < 768;
@@ -464,6 +474,13 @@ class _ScadaShellScreenState extends State<ScadaShellScreen> {
                     label: 'Hệ thống',
                     icon: Icons.settings_suggest_rounded,
                     isSelected: isSystemActive,
+                  ),
+                  _bottomNavItem(
+                    context: context,
+                    id: 'danhmuc',
+                    label: 'Danh mục',
+                    icon: Icons.grid_view_rounded,
+                    isSelected: provider.activeView == 'danhmuc',
                   ),
                 ],
               ),

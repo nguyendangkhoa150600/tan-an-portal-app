@@ -114,10 +114,47 @@ class _OneLineDiagramViewState extends State<OneLineDiagramView> {
   }
 
   Future<void> _loadPage() async {
+    final provider = context.read<ScadaProvider>();
+    final token = provider.apiClient.sessionToken;
+    final Uri baseUri = Uri.parse(_baseUrl);
+
+    final cookieManager = WebViewCookieManager();
+    try {
+      if (token != null && token.isNotEmpty) {
+        await cookieManager.setCookie(
+          WebViewCookie(
+            name: 'fe_tanan_admin',
+            value: token,
+            domain: baseUri.host,
+            path: '/',
+          ),
+        );
+        await cookieManager.setCookie(
+          WebViewCookie(
+            name: 'tanan_user',
+            value: token,
+            domain: baseUri.host,
+            path: '/',
+          ),
+        );
+        await cookieManager.setCookie(
+          WebViewCookie(
+            name: 'tanan_admin',
+            value: token,
+            domain: baseUri.host,
+            path: '/',
+          ),
+        );
+      }
+    } catch (_) {}
+
     final Map<String, String> headers = {
       'Accept': 'text/html',
       'Accept-Language': 'vi-VN,vi',
     };
+    if (token != null && token.isNotEmpty) {
+      headers['Cookie'] = 'fe_tanan_admin=$token; tanan_user=$token; tanan_admin=$token';
+    }
 
     await _controller.loadRequest(
       Uri.parse(_baseUrl),
@@ -159,7 +196,7 @@ class _OneLineDiagramViewState extends State<OneLineDiagramView> {
                       ),
                     ),
                     Text(
-                      'TBA 110kV Tân An, 35/110 kV',
+                      'TBA 110kV Tân Ân, 35/110 kV',
                       style: TextStyle(
                         fontSize: 10,
                         color: AppTheme.textSecondary,
