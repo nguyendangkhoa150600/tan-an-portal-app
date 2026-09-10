@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:tan_an_portal/core/theme/app_theme.dart';
 import 'package:tan_an_portal/features/scada/data/sources/scada_api_client.dart';
 import 'package:tan_an_portal/features/scada/presentation/providers/scada_provider.dart';
@@ -14,109 +13,92 @@ class OneLineDiagramView extends StatefulWidget {
 }
 
 class _OneLineDiagramViewState extends State<OneLineDiagramView> {
-  WebViewController? _controller;
+  late final WebViewController _controller;
   bool _isLoading = true;
   bool _hasError = false;
   bool _initialized = false;
 
   static const String _baseUrl = ScadaApiClient.configuredBaseUrl;
-  static const String _diagramPath = '';
 
   @override
   void initState() {
     super.initState();
-    _initController();
-  }
-
-  void _initController() {
-    if (_controller != null) return;
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF05070A))
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (_) {
-            if (mounted) {
-              setState(() {
-                _isLoading = true;
-                _hasError = false;
-              });
-            }
+            if (mounted) setState(() { _isLoading = true; _hasError = false; });
           },
           onPageFinished: (_) async {
             if (mounted) setState(() => _isLoading = false);
 
-            // Clean DOM manipulation to navigate to diagram and hide portal chrome without breaking page layout
-            await _controller?.runJavaScript('''
+            // Execute client script: navigate to Sơ đồ điện tab, activate focus mode, & optimize canvas bounds
+            await _controller.runJavaScript('''
               (function() {
-                function prepareDiagramView() {
+                function setupDiagramView() {
                   try {
-                    // 1. Click on "Sơ đồ điện" nav button if present and not active
-                    var navButtons = document.querySelectorAll('nav button');
-                    for (var i = 0; i < navButtons.length; i++) {
-                      var text = (navButtons[i].textContent || '').trim();
-                      if (text.indexOf('Sơ đồ điện') !== -1 || text.indexOf('S\\u01A1 \\u0111\\u1ED3 \\u0111i\\u1EC7n') !== -1) {
-                        navButtons[i].click();
-                        break;
-                      }
+                    // 1. Select 'Sơ đồ điện' view tab
+                    var navButtons = Array.from(document.querySelectorAll('aside nav button'));
+                    var diagramBtn = navButtons.find(function(b) {
+                      return b.textContent && b.textContent.indexOf('Sơ đồ điện') !== -1;
+                    }) || navButtons[1];
+                    if (diagramBtn) {
+                      diagramBtn.click();
                     }
 
-                    // 2. Hide sidebar navigation aside and expand shell
+                    // 2. Trigger focus mode to expand workspace layout
+                    var actionButtons = Array.from(document.querySelectorAll('header button'));
+                    var focusBtn = actionButtons.find(function(b) {
+                      return b.textContent && b.textContent.indexOf('Toàn màn hình') !== -1;
+                    });
+                    if (focusBtn) {
+                      focusBtn.click();
+                    }
+
+                    // 3. Hide chrome elements safely after workspace is active
                     var aside = document.querySelector('aside');
-                    if (aside) {
-                      aside.style.display = 'none';
-                    }
-                    var shell = document.querySelector('[class*="shell"]');
-                    if (shell) {
-                      shell.style.gridTemplateColumns = '1fr';
-                      shell.style.display = 'grid';
-                      shell.style.height = '100vh';
-                      shell.style.width = '100vw';
-                    }
+                    if (aside) aside.style.display = 'none';
 
-                    // 3. Expand main and workspace to full viewport
+                    var headers = document.querySelectorAll('header');
+                    headers.forEach(function(h) { h.style.display = 'none'; });
+
+                    var footers = document.querySelectorAll('footer');
+                    footers.forEach(function(f) { f.style.display = 'none'; });
+
+                    // 4. Ensure workspace container & body fill full viewport
                     var main = document.querySelector('main');
                     if (main) {
                       main.style.padding = '0';
                       main.style.margin = '0';
-                      main.style.height = '100vh';
-                      main.style.width = '100vw';
+                      main.style.minHeight = '100vh';
                     }
-                    var workspace = document.querySelector('[class*="workspace"]');
+                    var workspace = document.querySelector('section');
                     if (workspace) {
                       workspace.style.height = '100vh';
-                      workspace.style.maxHeight = '100vh';
-                      workspace.style.border = 'none';
+                      workspace.style.minHeight = '100vh';
+                      workspace.style.border = '0';
                       workspace.style.borderRadius = '0';
                     }
-
-                    // 4. Hide portal headers and footers
-                    var headers = document.querySelectorAll('header');
-                    headers.forEach(function(h) { h.style.display = 'none'; });
-                    var footers = document.querySelectorAll('footer');
-                    footers.forEach(function(f) { f.style.display = 'none'; });
+                    var workspaceBody = document.querySelector('section > div');
+                    if (workspaceBody) {
+                      workspaceBody.style.height = '100vh';
+                      workspaceBody.style.flex = '1';
+                    }
                   } catch(e) {}
                 }
 
-                prepareDiagramView();
-                setTimeout(prepareDiagramView, 100);
-                setTimeout(prepareDiagramView, 300);
-                setTimeout(prepareDiagramView, 800);
-                setTimeout(prepareDiagramView, 1500);
+                setupDiagramView();
+                setTimeout(setupDiagramView, 150);
+                setTimeout(setupDiagramView, 400);
+                setTimeout(setupDiagramView, 800);
+                setTimeout(setupDiagramView, 1500);
               })();
             ''');
           },
-          onWebResourceError: (WebResourceError error) {
-            // Only show full error overlay if the main frame itself failed to load.
-            // Subresource errors (e.g. Cloudflare beacon CSP block) should not break diagram display.
-            if (error.isForMainFrame ?? false) {
-              if (mounted) {
-                setState(() {
-                  _isLoading = false;
-                  _hasError = true;
-                });
-              }
-            }
+          onWebResourceError: (_) {
+            if (mounted) setState(() { _isLoading = false; _hasError = true; });
           },
         ),
       );
@@ -125,7 +107,6 @@ class _OneLineDiagramViewState extends State<OneLineDiagramView> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _initController();
     if (!_initialized) {
       _initialized = true;
       _loadPage();
@@ -133,14 +114,15 @@ class _OneLineDiagramViewState extends State<OneLineDiagramView> {
   }
 
   Future<void> _loadPage() async {
-    _initController();
     final Map<String, String> headers = {
       'Accept': 'text/html',
-      'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
+      'Accept-Language': 'vi-VN,vi',
     };
 
-    final uri = Uri.parse('$_baseUrl$_diagramPath');
-    await _controller?.loadRequest(uri, headers: headers);
+    await _controller.loadRequest(
+      Uri.parse(_baseUrl),
+      headers: headers,
+    );
   }
 
   Future<void> _reload() async {
@@ -156,20 +138,20 @@ class _OneLineDiagramViewState extends State<OneLineDiagramView> {
 
     return Column(
       children: [
-        // ── Header bar ──
+        // ── Header bar ────────────────────────────────────────────────────
         Container(
           color: AppTheme.surface,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             children: [
-              // Title - takes all available space, ellipsis if too long
+              // Title — takes all available space
               const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Sơ đồ nhất thứ trạm',
+                      'Sơ đồ điện trạm biến áp',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
@@ -177,7 +159,7 @@ class _OneLineDiagramViewState extends State<OneLineDiagramView> {
                       ),
                     ),
                     Text(
-                      'Trạm biến áp 110kV Tân An',
+                      'TBA 110kV Tân An, 35/110 kV',
                       style: TextStyle(
                         fontSize: 10,
                         color: AppTheme.textSecondary,
@@ -188,9 +170,11 @@ class _OneLineDiagramViewState extends State<OneLineDiagramView> {
                 ),
               ),
               const SizedBox(width: 8),
+
               // Live status dot + count
               _buildStatusDot(provider, isLive, tagCount),
               const SizedBox(width: 4),
+
               // Reload button
               IconButton(
                 iconSize: 18,
@@ -208,11 +192,11 @@ class _OneLineDiagramViewState extends State<OneLineDiagramView> {
         ),
         const Divider(height: 1, thickness: 1, color: AppTheme.border),
 
-        // ── WebView body ──
+        // ── WebView body ─────────────────────────────────────────────────
         Expanded(
           child: Stack(
             children: [
-              if (_controller != null) _buildWebViewWidget(),
+              WebViewWidget(controller: _controller),
 
               // Loading overlay
               if (_isLoading)
@@ -291,7 +275,7 @@ class _OneLineDiagramViewState extends State<OneLineDiagramView> {
   Widget _buildStatusDot(ScadaProvider provider, bool isLive, int tagCount) {
     final color = isLive ? AppTheme.success : AppTheme.error;
     final label = isLive
-        ? (tagCount > 0 ? '$tagCount tín hiệu' : 'Online')
+        ? (tagCount > 0 ? '$tagCount Tín hiệu' : 'Online')
         : 'Mất kết nối';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -320,23 +304,5 @@ class _OneLineDiagramViewState extends State<OneLineDiagramView> {
         ],
       ),
     );
-  }
-
-  Widget _buildWebViewWidget() {
-    if (_controller == null) return const SizedBox.shrink();
-
-    final controllerPlatform = _controller!.platform;
-    if (controllerPlatform is AndroidWebViewController) {
-      return WebViewWidget.fromPlatformCreationParams(
-        params: AndroidWebViewWidgetCreationParams.fromPlatformWebViewWidgetCreationParams(
-          AndroidWebViewWidgetCreationParams(
-            controller: controllerPlatform,
-            displayWithHybridComposition: true,
-          ),
-        ),
-      );
-    }
-
-    return WebViewWidget(controller: _controller!);
   }
 }

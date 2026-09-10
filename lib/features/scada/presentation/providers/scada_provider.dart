@@ -4,12 +4,19 @@ import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 
 import '../../data/models/scada_models.dart';
+import '../../data/models/dispatch_models.dart';
 import '../../data/sources/scada_api_client.dart';
 
 class ScadaProvider with ChangeNotifier {
   final ScadaApiClient _api;
   Timer? _pollTimer;
   bool _disposed = false;
+
+  List<PpcStatus>? _ppcStatuses;
+  WindAgcStatus? _windAgc;
+  List<VestasLivePark> _vestasParks = [];
+  List<DispatchLamp> _dispatchLamps = [];
+
 
   SnapshotEnvelope _envelope = SnapshotEnvelope(
     origin: 'empty',
@@ -65,6 +72,10 @@ class ScadaProvider with ChangeNotifier {
   }
 
   SnapshotEnvelope get envelope => _envelope;
+  List<PpcStatus>? get ppcStatuses => _ppcStatuses;
+  WindAgcStatus? get windAgc => _windAgc;
+  List<VestasLivePark> get vestasParks => _vestasParks;
+  List<DispatchLamp> get dispatchLamps => _dispatchLamps;
   String get activeView => _activeView;
   String get activeSceneId => _activeSceneId;
   String get vestasMode => _vestasMode;
@@ -159,6 +170,8 @@ class ScadaProvider with ChangeNotifier {
 
   Future<void> refreshRealtime() async {
     final iecRequest = _api.vestasIecSnapshot();
+    final vestasLiveRequest = _api.vestasLive();
+    final windSnapshotRequest = _api.windSnapshot();
     try {
       final responses = await Future.wait([
         _api.health(),
@@ -183,6 +196,20 @@ class ScadaProvider with ChangeNotifier {
       _vestasIecConnected = false;
       _dg2IecTurbines = [];
       _lastError = error.toString();
+    }
+    try {
+      _applyVestasLive(await vestasLiveRequest);
+    } catch (error) {
+      if (kDebugMode) {
+        print('Error loading vestas live data: $error');
+      }
+    }
+    try {
+      _applyWindSnapshot(await windSnapshotRequest);
+    } catch (error) {
+      if (kDebugMode) {
+        print('Error loading wind snapshot data: $error');
+      }
     }
     _safeNotify();
   }
@@ -316,7 +343,39 @@ class ScadaProvider with ChangeNotifier {
       receivedAt: response['receivedAt']?.toString(),
       snapshot: ScadaSnapshot.fromJson(Map<String, dynamic>.from(raw)),
     );
+    final snapshot = _envelope.snapshot;
+    _ppcStatuses = hasPpcStatuses(snapshot) ? derivePpcStatuses(snapshot) : null;
+    _updateDispatchLamps();
   }
+
+  void _applyWindSnapshot(Map<String, dynamic> response) {
+    final raw = response['snapshot'];
+    if (raw is Map) {
+      final snapshot = ScadaSnapshot.fromJson(Map<String, dynamic>.from(raw));
+      _windAgc = deriveWindAgc(snapshot);
+      _updateDispatchLamps();
+    }
+  }
+
+  void _applyVestasLive(Map<String, dynamic> response) {
+    final snapshot = response['snapshot'];
+    if (snapshot is Map) {
+      final parksJson = snapshot['parks'];
+      if (parksJson is List) {
+        _vestasParks = parksJson
+            .whereType<Map>()
+            .map((p) => VestasLivePark.fromJson(Map<String, dynamic>.from(p)))
+            .toList();
+        _updateDispatchLamps();
+      }
+    }
+  }
+
+  void _updateDispatchLamps() {
+    final vestasSetpoints = vestasSetpointsOf(_vestasParks);
+    _dispatchLamps = buildDispatchLamps(_windAgc, vestasSetpoints);
+  }
+
 
   void _applyTurbines(Map<String, dynamic> response) {
     final sources = response['sources'];

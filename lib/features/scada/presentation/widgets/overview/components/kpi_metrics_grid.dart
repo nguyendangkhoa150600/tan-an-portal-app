@@ -1,8 +1,11 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tan_an_portal/core/theme/app_theme.dart';
 import 'package:tan_an_portal/core/utils/scada_helpers.dart';
 import '../../../providers/scada_provider.dart';
+import '../../../../data/models/dispatch_models.dart';
+import '../../dispatch/dispatch_lamp_widget.dart';
 
 class KpiMetricsGrid extends StatelessWidget {
   const KpiMetricsGrid({super.key});
@@ -126,159 +129,124 @@ class KpiMetricsGrid extends StatelessWidget {
         .where((t) => t['status'] == 'running')
         .length;
 
-    if (isMobile) {
-      return Column(
-        children: [
-          Row(
-            children: [
-              _kpiCard(
-                icon: Icons.bolt_rounded,
-                title: 'Công suất hiện tại',
-                value: ScadaHelpers.formatTelemetry(
-                  powerNowKw / 1000,
-                  unit: 'MW',
-                ),
-                subText:
-                    'định mức ${(ratedKw / 1000).toStringAsFixed(0)} MW · ${ScadaHelpers.formatTelemetry(capacityFactor * 100, fractionDigits: 0, unit: '%')}',
-              ),
-              const SizedBox(width: 12),
-              _kpiCard(
-                icon: Icons.query_stats_rounded,
-                title: 'Sản lượng hôm nay',
-                value: ScadaHelpers.formatTelemetry(
-                  todayYieldKwh / 1000,
-                  unit: 'MWh',
-                ),
-                subText: yesterdayYieldUpToNowKwh > 0
-                    ? '${yieldDeltaPct >= 0 ? "+" : ""}${yieldDeltaPct.toStringAsFixed(1)}% so với cùng giờ hôm qua'
-                    : 'chưa đủ dữ liệu để so sánh',
-                subColor: yesterdayYieldUpToNowKwh > 0
-                    ? (yieldDeltaPct >= 0 ? AppTheme.success : AppTheme.error)
-                    : AppTheme.textSecondary,
-                onTap: () {
-                  provider.activeView = 'analytics';
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _kpiCard(
-                icon: Icons.speed_rounded,
-                title: 'Hệ số công suất',
-                value: ScadaHelpers.formatTelemetry(
-                  capacityFactor * 100,
-                  unit: '%',
-                ),
-                subText: fullLoadHours.isFinite
-                    ? '≈ ${fullLoadHours.toStringAsFixed(1)} giờ đầy tải hôm nay'
-                    : 'Mất kết nối',
-              ),
-              const SizedBox(width: 12),
-              _kpiCard(
-                icon: Icons.mode_fan_off_rounded,
-                title: 'Tua-bin đang chạy',
-                value: '$runningCount / ${fleet.length}',
-                subText:
-                    'ĐG1: ${dg1Live.where((t) => t['status'] == 'running').length}/7 · ĐG2: ${dg2Live.where((t) => t['status'] == 'running').length}/17',
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _kpiCard(
-                icon: Icons.air_rounded,
-                title: 'Gió trung bình',
-                value: ScadaHelpers.formatTelemetry(windNowAvg, unit: 'm/s'),
-                subText:
-                    'ĐG1: ${ScadaHelpers.formatTelemetry(dg1WindAvg, unit: 'm/s')} · ĐG2: ${ScadaHelpers.formatTelemetry(dg2WindAvg, unit: 'm/s')}',
-              ),
-              const SizedBox(width: 12),
-              _kpiCard(
-                icon: Icons.warning_amber_rounded,
-                title: 'Cảnh báo',
-                value: '${warnings.length} mục',
-                subText: 'trụ · tín hiệu · hạ tầng',
-                cardColor: warnings.isNotEmpty
-                    ? AppTheme.error.withValues(alpha: 0.08)
-                    : null,
-              ),
-            ],
-          ),
-        ],
-      );
-    } else {
-      return Row(
-        children: [
-          _kpiCard(
-            icon: Icons.bolt_rounded,
-            title: 'Công suất hiện tại',
-            value: ScadaHelpers.formatTelemetry(powerNowKw / 1000, unit: 'MW'),
-            subText:
-                'định mức ${(ratedKw / 1000).toStringAsFixed(0)} MW · ${ScadaHelpers.formatTelemetry(capacityFactor * 100, fractionDigits: 0, unit: '%')}',
-          ),
-          const SizedBox(width: 12),
-          _kpiCard(
-            icon: Icons.query_stats_rounded,
-            title: 'Sản lượng hôm nay',
-            value: ScadaHelpers.formatTelemetry(
-              todayYieldKwh / 1000,
-              unit: 'MWh',
-            ),
-            subText: yesterdayYieldUpToNowKwh > 0
-                ? '${yieldDeltaPct >= 0 ? "+" : ""}${yieldDeltaPct.toStringAsFixed(1)}% so với cùng giờ hôm qua'
-                : 'chưa đủ dữ liệu để so sánh',
-            subColor: yesterdayYieldUpToNowKwh > 0
-                ? (yieldDeltaPct >= 0 ? AppTheme.success : AppTheme.error)
-                : AppTheme.textSecondary,
-            onTap: () {
-              provider.activeView = 'analytics';
-            },
-          ),
-          const SizedBox(width: 12),
-          _kpiCard(
-            icon: Icons.speed_rounded,
-            title: 'Hệ số công suất',
-            value: ScadaHelpers.formatTelemetry(
-              capacityFactor * 100,
-              unit: '%',
-            ),
-            subText: fullLoadHours.isFinite
-                ? '≈ ${fullLoadHours.toStringAsFixed(1)} giờ đầy tải hôm nay'
-                : 'Mất kết nối',
-          ),
-          const SizedBox(width: 12),
-          _kpiCard(
-            icon: Icons.mode_fan_off_rounded,
-            title: 'Tua-bin đang chạy',
-            value: '$runningCount / ${fleet.length}',
-            subText:
-                'ĐG1: ${dg1Live.where((t) => t['status'] == 'running').length}/7 · ĐG2: ${dg2Live.where((t) => t['status'] == 'running').length}/17',
-          ),
-          const SizedBox(width: 12),
-          _kpiCard(
-            icon: Icons.air_rounded,
-            title: 'Gió trung bình',
-            value: ScadaHelpers.formatTelemetry(windNowAvg, unit: 'm/s'),
-            subText:
-                'ĐG1: ${ScadaHelpers.formatTelemetry(dg1WindAvg, unit: 'm/s')} · ĐG2: ${ScadaHelpers.formatTelemetry(dg2WindAvg, unit: 'm/s')}',
-          ),
-          const SizedBox(width: 12),
-          _kpiCard(
-            icon: Icons.warning_amber_rounded,
-            title: 'Cảnh báo',
-            value: '${warnings.length} mục',
-            subText: 'trụ · tín hiệu · hạ tầng',
-            cardColor: warnings.isNotEmpty
-                ? AppTheme.error.withValues(alpha: 0.08)
-                : null,
-          ),
-        ],
-      );
+    final List<Widget> cards = [
+      _kpiCard(
+        icon: Icons.bolt_rounded,
+        title: 'Công suất hiện tại',
+        value: ScadaHelpers.formatTelemetry(powerNowKw / 1000, unit: 'MW'),
+        subText:
+            'định mức ${(ratedKw / 1000).toStringAsFixed(0)} MW · ${ScadaHelpers.formatTelemetry(capacityFactor * 100, fractionDigits: 0, unit: '%')}',
+      ),
+      _kpiCard(
+        icon: Icons.query_stats_rounded,
+        title: 'Sản lượng hôm nay',
+        value: ScadaHelpers.formatTelemetry(
+          todayYieldKwh / 1000,
+          unit: 'MWh',
+        ),
+        subText: yesterdayYieldUpToNowKwh > 0
+            ? '${yieldDeltaPct >= 0 ? "+" : ""}${yieldDeltaPct.toStringAsFixed(1)}% so với cùng giờ hôm qua'
+            : 'chưa đủ dữ liệu để so sánh',
+        subColor: yesterdayYieldUpToNowKwh > 0
+            ? (yieldDeltaPct >= 0 ? AppTheme.success : AppTheme.error)
+            : AppTheme.textSecondary,
+        onTap: () {
+          provider.activeView = 'analytics';
+        },
+      ),
+      _kpiCard(
+        icon: Icons.speed_rounded,
+        title: 'Hệ số công suất',
+        value: ScadaHelpers.formatTelemetry(
+          capacityFactor * 100,
+          unit: '%',
+        ),
+        subText: fullLoadHours.isFinite
+            ? '≈ ${fullLoadHours.toStringAsFixed(1)} giờ đầy tải hôm nay'
+            : 'Mất kết nối',
+      ),
+      _kpiCard(
+        icon: Icons.mode_fan_off_rounded,
+        title: 'Tua-bin đang chạy',
+        value: '$runningCount / ${fleet.length}',
+        subText:
+            'ĐG1: ${dg1Live.where((t) => t['status'] == 'running').length}/7 · ĐG2: ${dg2Live.where((t) => t['status'] == 'running').length}/17',
+      ),
+      _kpiCard(
+        icon: Icons.air_rounded,
+        title: 'Gió trung bình',
+        value: ScadaHelpers.formatTelemetry(windNowAvg, unit: 'm/s'),
+        subText:
+            'ĐG1: ${ScadaHelpers.formatTelemetry(dg1WindAvg, unit: 'm/s')} · ĐG2: ${ScadaHelpers.formatTelemetry(dg2WindAvg, unit: 'm/s')}',
+      ),
+      _kpiCard(
+        icon: Icons.warning_amber_rounded,
+        title: 'Cảnh báo',
+        value: '${warnings.length} mục',
+        subText: 'trụ · tín hiệu · hạ tầng',
+        cardColor: warnings.isNotEmpty
+            ? AppTheme.error.withValues(alpha: 0.08)
+            : null,
+      ),
+      if (provider.ppcStatuses != null)
+        DispatchKpiCard(
+          title: 'PPC · TRẠM 110 KV',
+          tooltip: 'Trạm 110 kV — Active Power Control Setpoint Enable (chỉ đọc)',
+          lamps: provider.ppcStatuses!.map((ppc) => DispatchLampWidget(
+            label: ppc.label,
+            state: lampState(ppc.on),
+          )).toList(),
+        ),
+      if (provider.dispatchLamps.isNotEmpty)
+        DispatchKpiCard(
+          title: 'AGC · LỆNH ĐIỀU ĐỘ',
+          tooltip: 'Lệnh điều độ đang áp — Windy: EMS AGC (Điện gió 1); Vestas1/Vestas2: MW Setpoint từ EVN (Điện gió 2). Chỉ đọc.',
+          lamps: provider.dispatchLamps.map((lamp) => DispatchLampWidget(
+            label: lamp.label,
+            value: lamp.value,
+            state: lamp.state,
+          )).toList(),
+        ),
+    ];
+
+    final int columns = isMobile ? 2 : 4;
+    final List<Widget> gridRows = [];
+
+    for (int i = 0; i < cards.length; i += columns) {
+      final List<Widget> rowItems = [];
+      final int end = min(i + columns, cards.length);
+
+      for (int j = i; j < end; j++) {
+        rowItems.add(cards[j]);
+      }
+
+      while (rowItems.length < columns) {
+        rowItems.add(const Expanded(child: SizedBox()));
+      }
+
+      final List<Widget> spacedItems = [];
+      for (int k = 0; k < rowItems.length; k++) {
+        spacedItems.add(rowItems[k]);
+        if (k < rowItems.length - 1) {
+          spacedItems.add(const SizedBox(width: 12));
+        }
+      }
+
+      gridRows.add(Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: spacedItems,
+      ));
+      if (i + columns < cards.length) {
+        gridRows.add(const SizedBox(height: 12));
+      }
     }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: gridRows,
+    );
   }
+
 
   Widget _kpiCard({
     required IconData icon,
@@ -364,3 +332,69 @@ class KpiMetricsGrid extends StatelessWidget {
     return sum;
   }
 }
+
+class DispatchKpiCard extends StatelessWidget {
+  final String title;
+  final List<Widget> lamps;
+  final String tooltip;
+
+  const DispatchKpiCard({
+    super.key,
+    required this.title,
+    required this.lamps,
+    required this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Tooltip(
+        message: tooltip,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppTheme.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.tune_rounded, size: 14, color: AppTheme.primary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < lamps.length; i++) ...[
+                    lamps[i],
+                    if (i < lamps.length - 1) const SizedBox(height: 5),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+

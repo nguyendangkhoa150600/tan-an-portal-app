@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:tan_an_portal/core/theme/app_theme.dart';
 import 'package:tan_an_portal/core/utils/scada_helpers.dart';
 import '../../providers/scada_provider.dart';
+import '../dispatch/dispatch_lamp_widget.dart';
 import 'windfarm_1_view.dart'
     show
         SpinningTurbineIcon,
@@ -393,6 +394,42 @@ class WindFarm2View extends StatelessWidget {
             if (delayedCount > 0) ...[
               const SizedBox(height: 6),
               _statItem(AppTheme.warning, 'Tín hiệu chậm', '$delayedCount'),
+            ],
+            if (provider.vestasParks.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              const Text(
+                'ĐIỀU ĐỘ EVN (SETPOINT)',
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 10),
+              ...provider.vestasParks.map((park) {
+                final match = RegExp(r'(\d+)\s*$').firstMatch(park.park);
+                final name = match != null ? 'Vestas ${match.group(1)}' : park.park;
+                final ppc = park.ppc;
+                if (ppc == null) return const SizedBox();
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      EvnSetpointChip(ppc: ppc),
+                    ],
+                  ),
+                );
+              }),
             ],
           ],
         ],
