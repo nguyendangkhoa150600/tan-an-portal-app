@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../data/models/scada_models.dart';
 import '../../data/models/dispatch_models.dart';
 import '../../data/sources/scada_api_client.dart';
@@ -11,6 +13,9 @@ class ScadaProvider with ChangeNotifier {
   final ScadaApiClient _api;
   Timer? _pollTimer;
   bool _disposed = false;
+
+  bool _isLoggedIn = false;
+  String? _username;
 
   List<PpcStatus>? _ppcStatuses;
   WindAgcStatus? _windAgc;
@@ -64,11 +69,60 @@ class ScadaProvider with ChangeNotifier {
   };
 
   ScadaProvider({ScadaApiClient? api}) : _api = api ?? ScadaApiClient() {
+    unawaited(_loadSavedSession());
     unawaited(refreshAll());
     _pollTimer = Timer.periodic(
       const Duration(seconds: 5),
       (_) => unawaited(refreshRealtime()),
     );
+  }
+
+  bool get isLoggedIn => _isLoggedIn;
+  String? get username => _username;
+  ScadaApiClient get apiClient => _api;
+
+  Future<void> _loadSavedSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('session_token');
+      final user = prefs.getString('username');
+      if (token != null && token.isNotEmpty) {
+        _api.setSessionToken(token);
+        _isLoggedIn = true;
+        _username = user;
+        _safeNotify();
+      }
+    } catch (_) {}
+  }
+
+  Future<String?> login(String username, String password) async {
+    try {
+      final res = await _api.login(username, password);
+      if (res['success'] == true) {
+        _isLoggedIn = true;
+        _username = username;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('session_token', _api.sessionToken ?? 'authenticated');
+        await prefs.setString('username', username);
+        _safeNotify();
+        return null;
+      }
+      return res['error']?.toString() ?? 'Đăng nhập thất bại';
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  Future<void> logout() async {
+    _api.clearSession();
+    _isLoggedIn = false;
+    _username = null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('session_token');
+      await prefs.remove('username');
+    } catch (_) {}
+    _safeNotify();
   }
 
   SnapshotEnvelope get envelope => _envelope;
@@ -201,14 +255,20 @@ class ScadaProvider with ChangeNotifier {
       _applyVestasLive(await vestasLiveRequest);
     } catch (error) {
       if (kDebugMode) {
-        print('Error loading vestas live data: $error');
+        final errStr = error.toString().toLowerCase();
+        if (!errStr.contains('connection reset')) {
+          print('Error loading vestas live data: $error');
+        }
       }
     }
     try {
       _applyWindSnapshot(await windSnapshotRequest);
     } catch (error) {
       if (kDebugMode) {
-        print('Error loading wind snapshot data: $error');
+        final errStr = error.toString().toLowerCase();
+        if (!errStr.contains('connection reset')) {
+          print('Error loading wind snapshot data: $error');
+        }
       }
     }
     _safeNotify();
