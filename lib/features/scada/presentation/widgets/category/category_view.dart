@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:tan_an_portal/core/theme/app_theme.dart';
 import '../../providers/scada_provider.dart';
+import '../metering/revenue_metering_screen.dart';
+import '../members/roles_and_permissions_screen.dart';
 
 class CategoryView extends StatelessWidget {
   const CategoryView({super.key});
@@ -97,9 +99,83 @@ class CategoryView extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
-            // 2. Log Out Button Card
+            // 2. Business & Revenue Reports
+            // 2. Business & Reports Section (Filtered by isPageAllowed)
+            if (provider.isPageAllowed('metering')) ...[
+              const Text(
+                'BÁO CÁO & KINH DOANH',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textSecondary,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppTheme.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: AppTheme.primary.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: ListTile(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const RevenueMeteringScreen(),
+                      ),
+                    );
+                  },
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  leading: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: AppTheme.primary.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.receipt_long_rounded,
+                      color: AppTheme.primary,
+                      size: 22,
+                    ),
+                  ),
+                  title: const Text(
+                    'Sản lượng & doanh thu',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textStrong,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Báo cáo sản lượng điện & doanh thu bán điện theo tháng',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  trailing: const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppTheme.textSecondary,
+                    size: 22,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
+            // 3. Account & Roles Section
             const Text(
               'TÀI KHOẢN & PHIÊN',
               style: TextStyle(
@@ -110,6 +186,136 @@ class CategoryView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
+
+            // Only show admin management cards if user has manage-factory-members permission
+            if (provider.canManageMembers) ...[
+              Container(
+                decoration: BoxDecoration(
+                  color: AppTheme.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: AppTheme.primary.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: ListTile(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const FactoryMembersScreen(),
+                      ),
+                    );
+                  },
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  leading: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: AppTheme.primary.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.admin_panel_settings_rounded,
+                      color: AppTheme.primary,
+                      size: 22,
+                    ),
+                  ),
+                  title: const Text(
+                    'Thành viên & phân quyền',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textStrong,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Quản lý thành viên & phân quyền truy cập nhà máy',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  trailing: const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppTheme.textSecondary,
+                    size: 22,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // Vai trò truy cập Card
+              Container(
+                decoration: BoxDecoration(
+                  color: AppTheme.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: ListTile(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const AccessRolesScreen(),
+                      ),
+                    );
+                  },
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  leading: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.vpn_key_rounded,
+                      color: Color(0xFF10B981),
+                      size: 22,
+                    ),
+                  ),
+                  title: const Text(
+                    'Vai trò truy cập',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textStrong,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Cấu hình nhóm quyền trang & chức năng vận hành',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  trailing: const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppTheme.textSecondary,
+                    size: 22,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+            ],
+
+            const SizedBox(height: 12),
+
+            // 4. Log Out Button Card
 
             Container(
               decoration: BoxDecoration(

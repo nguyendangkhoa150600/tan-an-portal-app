@@ -219,14 +219,14 @@ class _LoginScreenState extends State<LoginScreen> {
                             const SizedBox(height: 16),
                           ],
 
-                          // Username Field
+                          // Username / Email Field
                           TextFormField(
                             controller: _usernameController,
                             style: const TextStyle(color: AppTheme.textStrong),
-                            keyboardType: TextInputType.text,
+                            keyboardType: TextInputType.emailAddress,
                             textInputAction: TextInputAction.next,
                             decoration: InputDecoration(
-                              labelText: 'Tên đăng nhập',
+                              labelText: 'Tài khoản / Email',
                               labelStyle: const TextStyle(color: AppTheme.textSecondary),
                               prefixIcon: const Icon(
                                 Icons.person_outline_rounded,

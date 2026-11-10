@@ -69,28 +69,152 @@ class ScadaProvider with ChangeNotifier {
   };
 
   ScadaProvider({ScadaApiClient? api}) : _api = api ?? ScadaApiClient() {
-    unawaited(_loadSavedSession());
-    unawaited(refreshAll());
+    _api.onSessionExpired = _onSessionExpired;
+    _api.onCookiesChanged = (cookieStr) async {
+      if (cookieStr != null && cookieStr.isNotEmpty) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('session_token', cookieStr);
+        } catch (_) {}
+      }
+    };
+    unawaited(_init());
+  }
+
+  Future<void> _init() async {
+    await _loadSavedSession();
+    if (_isLoggedIn) {
+      await refreshAll();
+    }
     _pollTimer = Timer.periodic(
       const Duration(seconds: 5),
-      (_) => unawaited(refreshRealtime()),
+      (_) {
+        if (_isLoggedIn) {
+          unawaited(refreshRealtime());
+        }
+      },
     );
   }
 
   bool get isLoggedIn => _isLoggedIn;
   String? get username => _username;
   ScadaApiClient get apiClient => _api;
+  bool get canManageMembers => _api.canManageMembers;
+
+  bool isPageAllowed(String pageKey) {
+    if (_api.allowedPageKeys == null) return true;
+    final key = switch (pageKey) {
+      'tongquan' => 'overview',
+      'oneline' => 'diagram',
+      'wind' => 'turbines',
+      'analytics' => 'analytics',
+      'forecast' => 'forecast',
+      'diagnostics' => 'diagnostics',
+      'metering' => 'reports',
+      _ => pageKey,
+    };
+    if (key == 'danhmuc') return true;
+    if (key == 'metering') {
+      return _api.allowedPageKeys!.contains('metering') ||
+          _api.allowedPageKeys!.contains('reports');
+    }
+    return _api.allowedPageKeys!.contains(key);
+  }
+
+  void _ensureActiveViewAllowed() {
+    if (!isPageAllowed(_activeView)) {
+      const candidates = ['tongquan', 'oneline', 'wind', 'analytics', 'danhmuc'];
+      for (final c in candidates) {
+        if (isPageAllowed(c)) {
+          _activeView = c;
+          _safeNotify();
+          break;
+        }
+      }
+    }
+  }
+
+  Future<bool> _onSessionExpired() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final manualLogout = prefs.getBool('manual_logout') ?? false;
+      if (manualLogout) return false;
+
+      final savedUser = prefs.getString('remembered_username') ?? prefs.getString('username');
+      final savedPass = prefs.getString('remembered_password');
+
+      if (savedUser != null && savedUser.isNotEmpty && savedPass != null && savedPass.isNotEmpty) {
+        if (kDebugMode) {
+          print('Token hết hạn (401). Đang tự động gia hạn phiên đăng nhập cho $savedUser...');
+        }
+        final res = await _api.login(savedUser, savedPass);
+        if (res['success'] == true) {
+          _isLoggedIn = true;
+          final token = _api.sessionToken;
+          if (token != null) {
+            await prefs.setString('session_token', token);
+          }
+          await _api.syncCookiesToWebView();
+          if (kDebugMode) {
+            print('Tự động gia hạn phiên đăng nhập thành công!');
+          }
+          _safeNotify();
+          return true;
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Lỗi khi tự động gia hạn phiên đăng nhập: $e');
+      }
+    }
+    return false;
+  }
 
   Future<void> _loadSavedSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final manualLogout = prefs.getBool('manual_logout') ?? false;
+      if (manualLogout) {
+        _isLoggedIn = false;
+        _safeNotify();
+        return;
+      }
+
       final token = prefs.getString('session_token');
       final user = prefs.getString('username');
+      final savedUser = prefs.getString('remembered_username');
+      final savedPass = prefs.getString('remembered_password');
+
       if (token != null && token.isNotEmpty) {
         _api.setSessionToken(token);
         _isLoggedIn = true;
-        _username = user;
+        _username = user ?? savedUser;
+        if (savedUser != null && savedPass != null) {
+          _api.setSavedCredentials(savedUser, savedPass);
+        }
+        await _api.syncCookiesToWebView();
         _safeNotify();
+
+        // Verify session and touch keep-alive
+        try {
+          await _api.resolveFactoryModule();
+          await _api.fetchPermissionsAndBootstrap();
+          _ensureActiveViewAllowed();
+        } catch (_) {}
+      } else if (savedUser != null && savedUser.isNotEmpty && savedPass != null && savedPass.isNotEmpty) {
+        // Auto-login with saved credentials
+        final res = await _api.login(savedUser, savedPass);
+        if (res['success'] == true) {
+          _isLoggedIn = true;
+          _username = savedUser;
+          final newToken = _api.sessionToken;
+          if (newToken != null) {
+            await prefs.setString('session_token', newToken);
+            await prefs.setString('username', savedUser);
+          }
+          await _api.syncCookiesToWebView();
+          _safeNotify();
+        }
       }
     } catch (_) {}
   }
@@ -100,11 +224,21 @@ class ScadaProvider with ChangeNotifier {
       final res = await _api.login(username, password);
       if (res['success'] == true) {
         _isLoggedIn = true;
-        _username = username;
+        final userData = res['user'];
+        _username = userData is Map
+            ? (userData['name']?.toString() ?? userData['email']?.toString() ?? username)
+            : username;
         final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('manual_logout', false);
         await prefs.setString('session_token', _api.sessionToken ?? 'authenticated');
-        await prefs.setString('username', username);
+        await prefs.setString('username', _username!);
+        await prefs.setString('remembered_username', username);
+        await prefs.setString('remembered_password', password);
+        await prefs.setBool('remember_me_flag', true);
+        await _api.syncCookiesToWebView();
         _safeNotify();
+        _ensureActiveViewAllowed();
+        unawaited(refreshAll());
         return null;
       }
       return res['error']?.toString() ?? 'Đăng nhập thất bại';
@@ -114,13 +248,14 @@ class ScadaProvider with ChangeNotifier {
   }
 
   Future<void> logout() async {
-    _api.clearSession();
+    await _api.logout();
     _isLoggedIn = false;
     _username = null;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('session_token');
       await prefs.remove('username');
+      await prefs.setBool('manual_logout', true);
     } catch (_) {}
     _safeNotify();
   }
@@ -218,11 +353,13 @@ class ScadaProvider with ChangeNotifier {
   }
 
   Future<void> refreshAll() async {
+    if (!_isLoggedIn) return;
     await refreshRealtime();
     await Future.wait([refreshAnalytics(), refreshTrend(), refreshForecast()]);
   }
 
   Future<void> refreshRealtime() async {
+    if (!_isLoggedIn) return;
     final iecRequest = _api.vestasIecSnapshot();
     final vestasLiveRequest = _api.vestasLive();
     final windSnapshotRequest = _api.windSnapshot();
@@ -256,7 +393,7 @@ class ScadaProvider with ChangeNotifier {
     } catch (error) {
       if (kDebugMode) {
         final errStr = error.toString().toLowerCase();
-        if (!errStr.contains('connection reset')) {
+        if (!errStr.contains('connection reset') && !errStr.contains('401')) {
           print('Error loading vestas live data: $error');
         }
       }
@@ -266,7 +403,7 @@ class ScadaProvider with ChangeNotifier {
     } catch (error) {
       if (kDebugMode) {
         final errStr = error.toString().toLowerCase();
-        if (!errStr.contains('connection reset')) {
+        if (!errStr.contains('connection reset') && !errStr.contains('401')) {
           print('Error loading wind snapshot data: $error');
         }
       }
@@ -275,6 +412,7 @@ class ScadaProvider with ChangeNotifier {
   }
 
   Future<void> refreshVestasIec() async {
+    if (!_isLoggedIn) return;
     try {
       _applyVestasIec(await _api.vestasIecSnapshot());
     } catch (error) {
@@ -286,6 +424,7 @@ class ScadaProvider with ChangeNotifier {
   }
 
   Future<void> refreshAnalytics() async {
+    if (!_isLoggedIn) return;
     final anchor = _analyticsGranularity == 'day'
         ? DateFormat('yyyy-MM-dd').format(_analyticsAnchor)
         : DateFormat('yyyy-MM').format(_analyticsAnchor);
@@ -348,6 +487,7 @@ class ScadaProvider with ChangeNotifier {
   }
 
   Future<void> refreshTrend() async {
+    if (!_isLoggedIn) return;
     try {
       final response = await _api.analyticsTrend();
       _trendPoints = _mapList(response['points']);
@@ -359,6 +499,7 @@ class ScadaProvider with ChangeNotifier {
   }
 
   Future<void> refreshForecast() async {
+    if (!_isLoggedIn) return;
     try {
       final response = await _api.windForecast();
       final site = response['site'];
@@ -514,8 +655,8 @@ class ScadaProvider with ChangeNotifier {
       ...raw,
       'id': raw['serial'] ?? raw['turbine'] ?? '',
       'name': raw['turbine']?.toString() ?? 'Mất kết nối',
-      'label': raw['turbine']?.toString() ?? 'Mất kết nối',
-      'serial': raw['serial']?.toString() ?? 'Mất kết nối',
+      'label': raw['model']?.toString() ?? 'V150-4000 MK3E',
+      'serial': raw['serial']?.toString() ?? raw['turbine']?.toString() ?? 'V150-4000 MK3E',
       'power': power ?? double.nan,
       'wind': _nullableNumber(raw['wind_ms']) ?? double.nan,
       'windDir': _nullableNumber(raw['wind_dir']),
@@ -543,11 +684,51 @@ class ScadaProvider with ChangeNotifier {
   Map<String, dynamic> _toUiTurbine(Map<String, dynamic> raw) {
     final parkCode = raw['parkCode']?.toString() ?? '';
     final tone = raw['tone']?.toString() ?? 'offline';
+
+    final rawName = raw['name']?.toString() ?? '';
+    final sourceLabel = raw['sourceLabel']?.toString() ?? '';
+    final model = raw['model']?.toString() ??
+        (parkCode == 'windmmcs' ? 'WD156-4200' : 'V150-4000 MK3E');
+
+    final bool isWindey = parkCode == 'windmmcs' ||
+        sourceLabel.startsWith('WT') ||
+        rawName.startsWith('T3-');
+
+    String turbineName;
+    String turbineSubtitle;
+
+    if (isWindey) {
+      if (sourceLabel.startsWith('WT')) {
+        turbineName = sourceLabel;
+      } else {
+        final t3Match = RegExp(r'^T3-(\d+)').firstMatch(rawName);
+        if (t3Match != null) {
+          turbineName =
+              'WT${int.parse(t3Match.group(1)!).toString().padLeft(2, '0')}';
+        } else {
+          turbineName = sourceLabel.isNotEmpty
+              ? sourceLabel
+              : (rawName.isNotEmpty ? rawName : 'WT');
+        }
+      }
+      turbineSubtitle = model;
+    } else {
+      turbineName = rawName.isNotEmpty ? rawName : sourceLabel;
+      turbineSubtitle = model;
+    }
+
     return {
       ...raw,
-      'id': raw['id'] ?? raw['name'] ?? '',
-      'label': raw['sourceLabel'] ?? raw['name'] ?? '',
-      'serial': parkCode == 'vestas' ? raw['sourceLabel'] : null,
+      'id': raw['id'] ?? turbineName,
+      'name': turbineName,
+      'label': turbineSubtitle,
+      'model': model,
+      'operatorName': rawName,
+      'sourceLabel': sourceLabel.isNotEmpty ? sourceLabel : turbineName,
+      'serial': raw['serial']?.toString() ??
+          (parkCode == 'vestas' && sourceLabel.isNotEmpty
+              ? sourceLabel
+              : turbineSubtitle),
       'power': _telemetryNumber(raw['powerKw']),
       'wind': _telemetryNumber(raw['windMs']),
       'windDir': _nullableNumber(raw['windDirectionDeg']),

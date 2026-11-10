@@ -950,7 +950,7 @@ class _WindFarmAllViewState extends State<WindFarmAllView> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        t['name'] as String,
+                        (t['name'] as String?) ?? '',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -960,7 +960,7 @@ class _WindFarmAllViewState extends State<WindFarmAllView> {
                         ),
                       ),
                       Text(
-                        t['label'] as String,
+                        (t['label'] as String?) ?? '',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -1320,7 +1320,7 @@ class _CompactTurbineCardAllState extends State<CompactTurbineCardAll> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            t['name'] as String,
+                            (t['name'] as String?) ?? '',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -1330,7 +1330,7 @@ class _CompactTurbineCardAllState extends State<CompactTurbineCardAll> {
                             ),
                           ),
                           Text(
-                            t['label'] as String,
+                            (t['label'] as String?) ?? '',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(

@@ -556,7 +556,7 @@ class DiagnosticsView extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: Text(
-                      t['name'] as String,
+                      (t['name'] as String?) ?? '',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 11,
