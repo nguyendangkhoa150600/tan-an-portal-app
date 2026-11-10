@@ -561,7 +561,7 @@ class WindFarm2View extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      t['name'] as String,
+                      (t['name'] as String?) ?? '',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
@@ -569,7 +569,7 @@ class WindFarm2View extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      t['serial'] as String,
+                      (t['serial'] as String?) ?? (t['label'] as String?) ?? '',
                       style: const TextStyle(
                         fontSize: 10,
                         color: AppTheme.textSecondary,
@@ -996,7 +996,7 @@ class _CompactTurbineCard2State extends State<CompactTurbineCard2> {
                           Row(
                             children: [
                               Text(
-                                t['name'] as String,
+                                (t['name'] as String?) ?? '',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
@@ -1020,7 +1020,7 @@ class _CompactTurbineCard2State extends State<CompactTurbineCard2> {
                             ],
                           ),
                           Text(
-                            t['serial'] as String,
+                            (t['serial'] as String?) ?? (t['label'] as String?) ?? '',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(

@@ -13,6 +13,7 @@ import '../widgets/analytics/analytics_view.dart';
 import '../widgets/forecast/forecast_view.dart';
 import '../widgets/diagnostics/diagnostics_view.dart';
 import '../widgets/category/category_view.dart';
+import '../widgets/metering/revenue_metering_screen.dart';
 import 'package:tan_an_portal/features/auth/presentation/screens/login_screen.dart';
 
 class ScadaShellScreen extends StatefulWidget {
@@ -61,6 +62,8 @@ class _ScadaShellScreenState extends State<ScadaShellScreen> {
         return const DiagnosticsView();
       case 'danhmuc':
         return const CategoryView();
+      case 'metering':
+        return const RevenueMeteringScreen(isEmbedded: true);
       default:
         return const OverviewDashboardView();
     }
@@ -82,6 +85,8 @@ class _ScadaShellScreenState extends State<ScadaShellScreen> {
         return 'Chẩn đoán hạ tầng';
       case 'danhmuc':
         return 'Danh mục hệ thống';
+      case 'metering':
+        return 'Sản lượng & doanh thu';
       default:
         return 'Hệ thống SCADA';
     }
@@ -447,34 +452,39 @@ class _ScadaShellScreenState extends State<ScadaShellScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _bottomNavItem(
-                    context: context,
-                    id: 'tongquan',
-                    label: 'Tổng quan',
-                    icon: Icons.dashboard_rounded,
-                    isSelected: provider.activeView == 'tongquan',
-                  ),
-                  _bottomNavItem(
-                    context: context,
-                    id: 'oneline',
-                    label: 'Sơ đồ điện',
-                    icon: Icons.hub_outlined,
-                    isSelected: provider.activeView == 'oneline',
-                  ),
-                  _bottomNavItem(
-                    context: context,
-                    id: 'wind',
-                    label: 'Điện gió',
-                    icon: Icons.wind_power_outlined,
-                    isSelected: provider.activeView == 'wind',
-                  ),
-                  _bottomNavItem(
-                    context: context,
-                    id: 'analytics',
-                    label: 'Hệ thống',
-                    icon: Icons.settings_suggest_rounded,
-                    isSelected: isSystemActive,
-                  ),
+                  if (provider.isPageAllowed('tongquan'))
+                    _bottomNavItem(
+                      context: context,
+                      id: 'tongquan',
+                      label: 'Tổng quan',
+                      icon: Icons.dashboard_rounded,
+                      isSelected: provider.activeView == 'tongquan',
+                    ),
+                  if (provider.isPageAllowed('oneline'))
+                    _bottomNavItem(
+                      context: context,
+                      id: 'oneline',
+                      label: 'Sơ đồ điện',
+                      icon: Icons.hub_outlined,
+                      isSelected: provider.activeView == 'oneline',
+                    ),
+                  if (provider.isPageAllowed('wind'))
+                    _bottomNavItem(
+                      context: context,
+                      id: 'wind',
+                      label: 'Điện gió',
+                      icon: Icons.wind_power_outlined,
+                      isSelected: provider.activeView == 'wind',
+                    ),
+                  if (provider.isPageAllowed('analytics') ||
+                      provider.isPageAllowed('diagnostics'))
+                    _bottomNavItem(
+                      context: context,
+                      id: 'analytics',
+                      label: 'Hệ thống',
+                      icon: Icons.settings_suggest_rounded,
+                      isSelected: isSystemActive,
+                    ),
                   _bottomNavItem(
                     context: context,
                     id: 'danhmuc',

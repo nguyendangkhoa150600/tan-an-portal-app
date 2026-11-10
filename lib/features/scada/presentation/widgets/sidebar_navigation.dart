@@ -83,54 +83,69 @@ class SidebarNavigation extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               children: [
-                _navItem(
-                  context: context,
-                  id: 'tongquan',
-                  label: 'Tổng quan',
-                  icon: Icons.dashboard_rounded,
-                  isSelected: provider.activeView == 'tongquan',
-                  isCollapsed: isCollapsed,
-                ),
-                _navItem(
-                  context: context,
-                  id: 'oneline',
-                  label: 'Sơ đồ điện',
-                  icon: Icons.hub_outlined,
-                  isSelected: provider.activeView == 'oneline',
-                  isCollapsed: isCollapsed,
-                ),
-                _navItem(
-                  context: context,
-                  id: 'wind',
-                  label: 'Điện gió',
-                  icon: Icons.wind_power_outlined,
-                  isSelected: provider.activeView == 'wind',
-                  isCollapsed: isCollapsed,
-                ),
-                _navItem(
-                  context: context,
-                  id: 'analytics',
-                  label: 'Phân tích',
-                  icon: Icons.bar_chart_rounded,
-                  isSelected: provider.activeView == 'analytics',
-                  isCollapsed: isCollapsed,
-                ),
-                _navItem(
-                  context: context,
-                  id: 'forecast',
-                  label: 'Dự báo',
-                  icon: Icons.trending_up_rounded,
-                  isSelected: provider.activeView == 'forecast',
-                  isCollapsed: isCollapsed,
-                ),
-                _navItem(
-                  context: context,
-                  id: 'diagnostics',
-                  label: 'Chẩn đoán',
-                  icon: Icons.monitor_heart_outlined,
-                  isSelected: provider.activeView == 'diagnostics',
-                  isCollapsed: isCollapsed,
-                ),
+                if (provider.isPageAllowed('tongquan'))
+                  _navItem(
+                    context: context,
+                    id: 'tongquan',
+                    label: 'Tổng quan',
+                    icon: Icons.dashboard_rounded,
+                    isSelected: provider.activeView == 'tongquan',
+                    isCollapsed: isCollapsed,
+                  ),
+                if (provider.isPageAllowed('oneline'))
+                  _navItem(
+                    context: context,
+                    id: 'oneline',
+                    label: 'Sơ đồ điện',
+                    icon: Icons.hub_outlined,
+                    isSelected: provider.activeView == 'oneline',
+                    isCollapsed: isCollapsed,
+                  ),
+                if (provider.isPageAllowed('wind'))
+                  _navItem(
+                    context: context,
+                    id: 'wind',
+                    label: 'Điện gió',
+                    icon: Icons.wind_power_outlined,
+                    isSelected: provider.activeView == 'wind',
+                    isCollapsed: isCollapsed,
+                  ),
+                if (provider.isPageAllowed('analytics'))
+                  _navItem(
+                    context: context,
+                    id: 'analytics',
+                    label: 'Phân tích',
+                    icon: Icons.bar_chart_rounded,
+                    isSelected: provider.activeView == 'analytics',
+                    isCollapsed: isCollapsed,
+                  ),
+                if (provider.isPageAllowed('forecast'))
+                  _navItem(
+                    context: context,
+                    id: 'forecast',
+                    label: 'Dự báo',
+                    icon: Icons.trending_up_rounded,
+                    isSelected: provider.activeView == 'forecast',
+                    isCollapsed: isCollapsed,
+                  ),
+                if (provider.isPageAllowed('diagnostics'))
+                  _navItem(
+                    context: context,
+                    id: 'diagnostics',
+                    label: 'Chẩn đoán',
+                    icon: Icons.monitor_heart_outlined,
+                    isSelected: provider.activeView == 'diagnostics',
+                    isCollapsed: isCollapsed,
+                  ),
+                if (provider.isPageAllowed('metering'))
+                  _navItem(
+                    context: context,
+                    id: 'metering',
+                    label: 'Sản lượng & DT',
+                    icon: Icons.receipt_long_rounded,
+                    isSelected: provider.activeView == 'metering',
+                    isCollapsed: isCollapsed,
+                  ),
                 _navItem(
                   context: context,
                   id: 'danhmuc',
