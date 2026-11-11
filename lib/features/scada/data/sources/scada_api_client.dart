@@ -109,22 +109,24 @@ class ScadaApiClient {
           var password = $passwordJson;
           if (!email || !password) return 'NO_CREDENTIALS';
 
-          var meta = document.querySelector('meta[name="csrf-token"]');
-          var csrf = meta ? meta.getAttribute('content') : '';
-          if (!csrf) {
+          // Luôn lấy CSRF token mới từ /api/v1/auth/session để tránh lỗi 419 (Page Expired)
+          var csrf = '';
+          try {
+            var sRes = await fetch('/api/v1/auth/session', {
+              headers: { 'Accept': 'application/json' },
+              credentials: 'include'
+            });
             var m = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
             if (m) csrf = decodeURIComponent(m[1]);
-          }
+          } catch(e) {}
 
           if (!csrf) {
-            try {
-              var sRes = await fetch('/api/v1/auth/session', {
-                headers: { 'Accept': 'application/json' },
-                credentials: 'include'
-              });
-              var m2 = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
-              if (m2) csrf = decodeURIComponent(m2[1]);
-            } catch(e) {}
+            var meta = document.querySelector('meta[name="csrf-token"]');
+            if (meta) csrf = meta.getAttribute('content');
+          }
+          if (!csrf) {
+            var m2 = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+            if (m2) csrf = decodeURIComponent(m2[1]);
           }
 
           var res = await fetch('/api/v1/auth/login', {
@@ -147,6 +149,39 @@ class ScadaApiClient {
         } catch(e) {
           return 'ERR_' + (e ? e.message : 'unknown');
         }
+      })();
+    ''';
+  }
+
+  /// Đoạn mã JavaScript giữ kết nối phiên làm việc (keep-alive) và ngăn chặn đăng xuất do idle trên web
+  String buildInWebViewKeepAliveScript() {
+    return '''
+      (function() {
+        if (window._savinaKeepAliveActive) return;
+        window._savinaKeepAliveActive = true;
+
+        // Định kỳ ping phiên làm việc mỗi 10 phút để máy chủ không coi là hết hạn vì không hoạt động
+        setInterval(function() {
+          try {
+            fetch('/api/v1/auth/session', {
+              headers: { 'Accept': 'application/json' },
+              credentials: 'include'
+            }).then(function(res) {
+              if (res.status === 401 && window.location.pathname.indexOf('/login') === -1) {
+                // Phiên bị gián đoạn: tải lại để kích hoạt auto-login
+                window.location.reload();
+              }
+            }).catch(function() {});
+          } catch(e) {}
+        }, 600000); // 10 phút
+
+        // Mô phỏng tương tác người dùng định kỳ mỗi 60 giây để chặn bộ đếm idle thời gian thực trên web
+        setInterval(function() {
+          try {
+            var evt = new MouseEvent('mousemove', { bubbles: true, cancelable: true });
+            document.dispatchEvent(evt);
+          } catch(e) {}
+        }, 60000);
       })();
     ''';
   }
@@ -302,15 +337,30 @@ class ScadaApiClient {
   }
 
   /// Ensure we have a valid CSRF token from Laravel session before POSTing
-  Future<void> _ensureCsrfToken() async {
-    if (_cookies.containsKey('XSRF-TOKEN')) return;
+  Future<void> _ensureCsrfToken({bool force = false}) async {
+    if (!force && _cookies.containsKey('XSRF-TOKEN')) return;
     try {
       final uri = Uri.parse('$baseUrl/api/v1/auth/session');
-      final res = await _http.get(uri, headers: {
-        'Accept': 'application/json',
-      }).timeout(const Duration(seconds: 8));
+      final Map<String, String> headers = {'Accept': 'application/json'};
+      final cookieStr = _cookieHeader();
+      if (cookieStr != null && !force) {
+        headers['Cookie'] = cookieStr;
+      }
+      final res = await _http
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 8));
       _extractCookies(res);
     } catch (_) {}
+  }
+
+  /// Giữ kết nối phiên đăng nhập (heartbeat) và kiểm tra phiên còn hiệu lực không
+  Future<bool> touchSession() async {
+    try {
+      final res = await _get('/api/v1/auth/session');
+      return res['data'] != null || res['user'] != null;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// System healthcheck
@@ -485,9 +535,16 @@ class ScadaApiClient {
   }
 
   /// Đăng nhập vào Savina Platform
-  Future<Map<String, dynamic>> login(String usernameOrEmail, String password) async {
+  Future<Map<String, dynamic>> login(
+    String usernameOrEmail,
+    String password, {
+    bool isAutoRenew = false,
+  }) async {
     try {
-      await _ensureCsrfToken();
+      if (isAutoRenew) {
+        _cookies.remove('XSRF-TOKEN');
+      }
+      await _ensureCsrfToken(force: isAutoRenew);
 
       // Normalize username/email
       final String email = usernameOrEmail.contains('@')
@@ -517,11 +574,29 @@ class ScadaApiClient {
         'password': password,
       });
 
-      final response = await _http
+      var response = await _http
           .post(uri, headers: headers, body: body)
           .timeout(const Duration(seconds: 12));
 
       _extractCookies(response);
+
+      // Tự động xử lý lỗi 419 Page Expired (CSRF token mismatch)
+      if (response.statusCode == 419) {
+        _cookies.remove('XSRF-TOKEN');
+        await _ensureCsrfToken(force: true);
+        final retryXsrf = _getXsrfToken();
+        if (retryXsrf != null) {
+          headers['X-XSRF-TOKEN'] = retryXsrf;
+        }
+        final retryCookie = _cookieHeader();
+        if (retryCookie != null) {
+          headers['Cookie'] = retryCookie;
+        }
+        response = await _http
+            .post(uri, headers: headers, body: body)
+            .timeout(const Duration(seconds: 12));
+        _extractCookies(response);
+      }
 
       if (response.statusCode == 200) {
         setSavedCredentials(usernameOrEmail, password);
@@ -529,8 +604,10 @@ class ScadaApiClient {
         final userData = decoded is Map ? decoded['data'] : null;
 
         // Resolve active factory module ID for Tan An dynamically
-        await resolveFactoryModule();
-        await fetchPermissionsAndBootstrap();
+        try {
+          await resolveFactoryModule();
+          await fetchPermissionsAndBootstrap();
+        } catch (_) {}
 
         return {
           'success': true,

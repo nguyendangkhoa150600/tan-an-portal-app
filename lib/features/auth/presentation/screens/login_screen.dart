@@ -71,13 +71,8 @@ class _LoginScreenState extends State<LoginScreen> {
       try {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('remember_me_flag', _rememberMe);
-        if (_rememberMe) {
-          await prefs.setString('remembered_username', username);
-          await prefs.setString('remembered_password', password);
-        } else {
-          await prefs.remove('remembered_username');
-          await prefs.remove('remembered_password');
-        }
+        await prefs.setString('remembered_username', username);
+        await prefs.setString('remembered_password', password);
       } catch (_) {}
     }
 
