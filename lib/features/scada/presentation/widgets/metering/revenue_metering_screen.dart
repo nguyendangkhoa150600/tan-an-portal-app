@@ -25,6 +25,7 @@ class _RevenueMeteringScreenState extends State<RevenueMeteringScreen> {
   bool _isFullscreen = false;
   bool _isLandscape = false;
   int _autoLoginAttempts = 0;
+  DateTime? _lastAutoLoginTime;
 
   @override
   void initState() {
@@ -97,6 +98,7 @@ class _RevenueMeteringScreenState extends State<RevenueMeteringScreen> {
               setState(() => _isLoading = false);
             }
             await _injectMobileStyles();
+            await _controller.runJavaScript(provider.apiClient.buildInWebViewKeepAliveScript());
             if (_isFullscreen) {
               await _controller.runJavaScript(
                 'if (window.setTableFullscreenMode) window.setTableFullscreenMode(true);',
@@ -120,6 +122,12 @@ class _RevenueMeteringScreenState extends State<RevenueMeteringScreen> {
   }
 
   Future<bool> _attemptInWebViewAutoLogin() async {
+    final now = DateTime.now();
+    if (_lastAutoLoginTime != null && now.difference(_lastAutoLoginTime!).inSeconds > 30) {
+      _autoLoginAttempts = 0;
+    }
+    _lastAutoLoginTime = now;
+
     if (_autoLoginAttempts >= 3) {
       if (mounted) setState(() => _isLoading = false);
       return false;

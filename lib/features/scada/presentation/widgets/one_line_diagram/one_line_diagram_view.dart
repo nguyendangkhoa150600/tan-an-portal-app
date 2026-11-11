@@ -18,6 +18,7 @@ class _OneLineDiagramViewState extends State<OneLineDiagramView> {
   bool _hasError = false;
   bool _initialized = false;
   int _autoLoginAttempts = 0;
+  DateTime? _lastAutoLoginTime;
 
   @override
   void initState() {
@@ -71,6 +72,7 @@ class _OneLineDiagramViewState extends State<OneLineDiagramView> {
 
             // Execute client script: maximize diagram canvas & hide platform shell chrome
             await _injectDiagramStyles();
+            await _controller.runJavaScript(provider.apiClient.buildInWebViewKeepAliveScript());
           },
           onWebResourceError: (error) {
             if (error.errorCode == -999 || error.description.contains('net::ERR_ABORTED')) {
@@ -83,6 +85,12 @@ class _OneLineDiagramViewState extends State<OneLineDiagramView> {
   }
 
   Future<bool> _attemptInWebViewAutoLogin() async {
+    final now = DateTime.now();
+    if (_lastAutoLoginTime != null && now.difference(_lastAutoLoginTime!).inSeconds > 30) {
+      _autoLoginAttempts = 0;
+    }
+    _lastAutoLoginTime = now;
+
     if (_autoLoginAttempts >= 3) {
       if (mounted) setState(() => _isLoading = false);
       return false;
