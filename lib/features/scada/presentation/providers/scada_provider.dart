@@ -15,7 +15,9 @@ class ScadaProvider with ChangeNotifier {
   bool _disposed = false;
 
   bool _isLoggedIn = false;
+  bool _isInitialized = false;
   String? _username;
+  int _keepAliveTick = 0;
 
   List<PpcStatus>? _ppcStatuses;
   WindAgcStatus? _windAgc;
@@ -91,12 +93,19 @@ class ScadaProvider with ChangeNotifier {
       (_) {
         if (_isLoggedIn) {
           unawaited(refreshRealtime());
+          _keepAliveTick++;
+          // Mỗi 10 phút (120 ticks * 5s) ping máy chủ để giữ phiên làm việc không bị idle
+          if (_keepAliveTick >= 120) {
+            _keepAliveTick = 0;
+            unawaited(_api.touchSession());
+          }
         }
       },
     );
   }
 
   bool get isLoggedIn => _isLoggedIn;
+  bool get isInitialized => _isInitialized;
   String? get username => _username;
   ScadaApiClient get apiClient => _api;
   bool get canManageMembers => _api.canManageMembers;
@@ -147,7 +156,7 @@ class ScadaProvider with ChangeNotifier {
         if (kDebugMode) {
           print('Token hết hạn (401). Đang tự động gia hạn phiên đăng nhập cho $savedUser...');
         }
-        final res = await _api.login(savedUser, savedPass);
+        final res = await _api.login(savedUser, savedPass, isAutoRenew: true);
         if (res['success'] == true) {
           _isLoggedIn = true;
           final token = _api.sessionToken;
@@ -170,6 +179,19 @@ class ScadaProvider with ChangeNotifier {
     return false;
   }
 
+  /// Xử lý khi ứng dụng quay trở lại từ chạy ngầm (resume)
+  Future<void> onAppResumed() async {
+    if (!_isLoggedIn) return;
+    try {
+      final isAlive = await _api.touchSession();
+      if (!isAlive) {
+        await _onSessionExpired();
+      }
+      await _api.syncCookiesToWebView();
+      unawaited(refreshRealtime());
+    } catch (_) {}
+  }
+
   Future<void> _loadSavedSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -185,25 +207,32 @@ class ScadaProvider with ChangeNotifier {
       final savedUser = prefs.getString('remembered_username');
       final savedPass = prefs.getString('remembered_password');
 
+      if (savedUser != null && savedPass != null) {
+        _api.setSavedCredentials(savedUser, savedPass);
+      }
+
       if (token != null && token.isNotEmpty) {
         _api.setSessionToken(token);
         _isLoggedIn = true;
         _username = user ?? savedUser;
-        if (savedUser != null && savedPass != null) {
-          _api.setSavedCredentials(savedUser, savedPass);
-        }
         await _api.syncCookiesToWebView();
         _safeNotify();
 
-        // Verify session and touch keep-alive
+        // Kiểm tra và giữ kết nối phiên làm việc
         try {
-          await _api.resolveFactoryModule();
-          await _api.fetchPermissionsAndBootstrap();
-          _ensureActiveViewAllowed();
+          final isAlive = await _api.touchSession();
+          if (!isAlive && savedUser != null && savedPass != null) {
+            // Phiên cũ đã hết hạn trên server trong lúc không dùng, tự động re-login ngầm ngay
+            await _onSessionExpired();
+          } else {
+            await _api.resolveFactoryModule();
+            await _api.fetchPermissionsAndBootstrap();
+            _ensureActiveViewAllowed();
+          }
         } catch (_) {}
       } else if (savedUser != null && savedUser.isNotEmpty && savedPass != null && savedPass.isNotEmpty) {
-        // Auto-login with saved credentials
-        final res = await _api.login(savedUser, savedPass);
+        // Tự động đăng nhập ngầm bằng tài khoản đã lưu
+        final res = await _api.login(savedUser, savedPass, isAutoRenew: true);
         if (res['success'] == true) {
           _isLoggedIn = true;
           _username = savedUser;
@@ -216,7 +245,11 @@ class ScadaProvider with ChangeNotifier {
           _safeNotify();
         }
       }
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _isInitialized = true;
+      _safeNotify();
+    }
   }
 
   Future<String?> login(String username, String password) async {

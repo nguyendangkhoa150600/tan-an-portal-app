@@ -23,7 +23,7 @@ class ScadaShellScreen extends StatefulWidget {
   State<ScadaShellScreen> createState() => _ScadaShellScreenState();
 }
 
-class _ScadaShellScreenState extends State<ScadaShellScreen> {
+class _ScadaShellScreenState extends State<ScadaShellScreen> with WidgetsBindingObserver {
   late Timer _clockTimer;
   DateTime _currentTime = DateTime.now();
   bool _isReloading = false;
@@ -31,6 +31,7 @@ class _ScadaShellScreenState extends State<ScadaShellScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
         setState(() {
@@ -42,8 +43,16 @@ class _ScadaShellScreenState extends State<ScadaShellScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _clockTimer.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      context.read<ScadaProvider>().onAppResumed();
+    }
   }
 
   Widget _buildActiveView(String activeView) {
@@ -188,6 +197,16 @@ class _ScadaShellScreenState extends State<ScadaShellScreen> {
     }
 
     final provider = context.watch<ScadaProvider>();
+    if (!provider.isInitialized) {
+      return const Scaffold(
+        backgroundColor: AppTheme.background,
+        body: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primary),
+          ),
+        ),
+      );
+    }
     if (!provider.isLoggedIn) {
       return const LoginScreen();
     }

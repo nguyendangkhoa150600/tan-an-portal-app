@@ -84,6 +84,7 @@ class _AdminWebViewScreenState extends State<AdminWebViewScreen> {
   String? _errorMessage;
   bool _initialized = false;
   int _autoLoginAttempts = 0;
+  DateTime? _lastAutoLoginTime;
 
   @override
   void initState() {
@@ -141,6 +142,7 @@ class _AdminWebViewScreenState extends State<AdminWebViewScreen> {
               setState(() => _isLoading = false);
             }
             await _injectMobileStyles();
+            await _controller.runJavaScript(provider.apiClient.buildInWebViewKeepAliveScript());
           },
           onWebResourceError: (error) {
             if (error.errorCode == -999 || error.description.contains('net::ERR_ABORTED')) {
@@ -159,6 +161,12 @@ class _AdminWebViewScreenState extends State<AdminWebViewScreen> {
   }
 
   Future<bool> _attemptInWebViewAutoLogin() async {
+    final now = DateTime.now();
+    if (_lastAutoLoginTime != null && now.difference(_lastAutoLoginTime!).inSeconds > 30) {
+      _autoLoginAttempts = 0;
+    }
+    _lastAutoLoginTime = now;
+
     if (_autoLoginAttempts >= 3) {
       if (mounted) setState(() => _isLoading = false);
       return false;
